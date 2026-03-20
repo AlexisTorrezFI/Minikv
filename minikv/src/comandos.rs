@@ -43,6 +43,39 @@ pub fn comando_unset(clave: String) {
         }           
     }
 }
+pb fn comando_get(clave: String) {
+    let diccionario = crear_diccionario_clave_valor();
+
+    match diccionario.get(&clave) {
+        Some(valor) => println!("{}", valor),
+        None => println!("NOT FOUND"),
+    }
+}
+fn crear_diccionario_clave_valor() -> HashMap<String, String> {
+    let mut diccionario = HashMap::new();
+
+    if let Ok(contenido) = fs::read_to_string(".minikv.log") {
+        for linea in contenido.lines() {
+            let partes = separar_argumentos(linea);
+
+            match partes.len() {
+                3 => {
+                    let clave = &partes[1];
+                    let valor = &partes[2];
+
+                    diccionario.insert(clave.to_string(), valor.to_string());
+                }
+                2 => {
+                    let clave = &partes[1];
+                    diccionario.remove(clave);
+                }
+                _ => {}
+            }
+        }
+    }
+    diccionario
+}
+
 fn separar_argumentos(texto: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut actual = String::new();
