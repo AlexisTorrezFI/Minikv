@@ -1,4 +1,7 @@
 mod comandos;
+mod parser;
+mod storage;
+mod errores;
 use std::env;
 use crate::comandos::comando_set;
 use crate::comandos::comando_unset;
@@ -13,23 +16,42 @@ fn main() {
 
     match (comando_option,clave_option,valor_option) {
         (Some(comando),Some(clave),Some(valor)) if comando == "set" => {
-            comando_set(clave, valor);
+            if let Err(e) = comando_set(clave, valor) {
+                errores::imprimir_error(e);
+            }else {
+                println!("OK");
+            }
         },
         (Some(comando),Some(clave),None) if comando == "set" => {
-            comando_unset(clave);
+            if let Err(e) = comando_unset(clave) {
+                errores::imprimir_error(e);
+            }else {
+                println!("OK");
+            }
         },
         //get
         (Some(comando),Some(clave),None) if comando == "get" => {
-            println!("Obteniendo valor de {}",clave);
-            //comando_get(clave);
+            match comandos::comando_get(clave) {
+                Ok(Some(valor)) => println!("{}", valor),
+                Ok(None) => println!("NOT FOUND"),
+                Err(e) => errores::imprimir_error(e),
+            }
         },
         //length
-        (Some(comando),None,None) if comando == "lenght" => {
-            println!("Obteniendo cantidad de claves asignadas");
+        (Some(comando),None,None) if comando == "length" => {
+            match comandos::comando_length() {
+                Ok(cantidad) => println!("{}", cantidad),
+                Err(e) => errores::imprimir_error(e),
+                
+            }
         },
         //snapshot
         (Some(comando),None,None) if comando == "snapshot" => {
-            println!("Haciendo snapshot de las claves asignadas");
+            if let Err(e) = comandos::comando_snapshot() {
+                errores::imprimir_error(e);
+            }else {
+                println!("OK");
+            }   
         },
         //nothing
         _ => {
