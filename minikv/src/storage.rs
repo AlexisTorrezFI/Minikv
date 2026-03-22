@@ -13,11 +13,11 @@ use std::io::Write;
 /// # Errores
 /// - Devuelve `NoSePudoAbrirArchivo` si no se puede abrir o crear el archivo.
 /// - Devuelve `NoSePudoEscribirArchivo` si falla la escritura.
-pub fn append_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
+pub fn append_linea_log(linea: &str, path_archivo: &str) -> Result<(), ErrorMiniKv> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(".minikv.log")
+        .open(path_archivo)
         .map_err(|_| ErrorMiniKv::NoSePudoAbrirArchivo)?;
     file.write_all(linea.as_bytes())
         .map_err(|_| ErrorMiniKv::NoSePudoEscribirArchivo)?;
@@ -38,12 +38,12 @@ pub fn append_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
 /// - `Ok(())` si el archivo se abre y se escribe correctamente.
 /// - `Err(ErrorMiniKv::NoSePudoAbrirArchivo)` si no se puede abrir o crear el archivo.
 /// - `Err(ErrorMiniKv::NoSePudoEscribirArchivo)` si ocurre un error al escribir.
-pub fn sobrescribir_data(contenido: &str) -> Result<(), ErrorMiniKv> {
+pub fn sobrescribir_data(contenido: &str, path_archivo: &str) -> Result<(), ErrorMiniKv> {
     let mut archivo = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(".minikv.data")
+        .open(path_archivo)
         .map_err(|_| ErrorMiniKv::NoSePudoAbrirArchivo)?;
     archivo
         .write_all(contenido.as_bytes())
@@ -59,12 +59,12 @@ pub fn sobrescribir_data(contenido: &str) -> Result<(), ErrorMiniKv> {
 ///
 /// - `Ok(())` si el archivo se abre correctamente y queda vacío.
 /// - `Err(ErrorMiniKv::NoSePudoAbrirArchivo)` si no se puede abrir o crear el archivo.
-pub fn vaciar_log() -> Result<(), ErrorMiniKv> {
+pub fn vaciar_log(path_log: &str) -> Result<(), ErrorMiniKv> {
     OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(".minikv.log")
+        .open(path_log)
         .map_err(|_| ErrorMiniKv::NoSePudoAbrirArchivo)?;
     Ok(())
 }
@@ -78,10 +78,10 @@ pub fn vaciar_log() -> Result<(), ErrorMiniKv> {
 /// Devuelve un `ErrorMiniKv` en los siguientes casos:
 /// - `NoSePudoLeerArchivo` si falla la lectura de los archivos.
 /// - `LineaInvalida` si alguna línea no tiene el formato esperado.
-pub fn reconstruir_estado() -> Result<HashMap<String, String>, ErrorMiniKv> {
+pub fn reconstruir_estado(path_data: &str, path_log: &str) -> Result<HashMap<String, String>, ErrorMiniKv> {
     let mut diccionario = HashMap::new();
-    cargar_data_en_memoria(&mut diccionario)?;
-    cargar_log_en_memoria(&mut diccionario)?;
+    cargar_data_en_memoria(&mut diccionario, path_data)?;
+    cargar_log_en_memoria(&mut diccionario, path_log)?;
     Ok(diccionario)
 }
 
@@ -119,8 +119,8 @@ pub fn reconstruir_estado() -> Result<HashMap<String, String>, ErrorMiniKv> {
 ///
 /// - `Ok(())` si el .data se ha procesado correctamente.
 /// - `Err(ErrorMiniKv)` si ocurre un error de lectura o si alguna línea es inválida.
-fn cargar_data_en_memoria(diccionario: &mut HashMap<String, String>) -> Result<(), ErrorMiniKv> {
-    let contenido = match fs::read_to_string(".minikv.data") {
+fn cargar_data_en_memoria(diccionario: &mut HashMap<String, String>, path_data: &str) -> Result<(), ErrorMiniKv> {
+    let contenido = match fs::read_to_string(path_data) {
         Ok(contenido) => contenido,
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
@@ -198,8 +198,8 @@ fn cargar_data_en_memoria(diccionario: &mut HashMap<String, String>) -> Result<(
 ///
 /// - `Ok(())` si el log se procesa correctamente.
 /// - `Err(ErrorMiniKv)` si ocurre un error de lectura o si alguna línea es inválida.
-fn cargar_log_en_memoria(diccionario: &mut HashMap<String, String>) -> Result<(), ErrorMiniKv> {
-    let contenido = match fs::read_to_string(".minikv.log") {
+fn cargar_log_en_memoria(diccionario: &mut HashMap<String, String>, path_log: &str) -> Result<(), ErrorMiniKv> {
+    let contenido = match fs::read_to_string(path_log) {
         Ok(contenido) => contenido,
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
@@ -291,261 +291,320 @@ fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
     fn test_01_append_linea_log_crea_archivo() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.log");
+        let path_log = ".test01.minikv.log";
+        let _ = fs::remove_file(path_log);
 
-        append_linea_log("set clave valor\n").unwrap();
+        append_linea_log("set clave valor\n",path_log).unwrap();
 
-        assert!(fs::metadata(".minikv.log").is_ok());
+        assert!(fs::metadata(path_log).is_ok());
+
+        let _ = fs::remove_file(".test01.minikv.log");
+
     }
     #[test]
     fn test_02_append_linea_log_escribe_linea() {
         use std::fs;
 
+        let path_log = ".test02.minikv.log";
         let _ = fs::remove_file(".minikv.log");
 
-        append_linea_log("set \"clave\" \"valor\"\n").unwrap();
+        append_linea_log("set \"clave\" \"valor\"\n",path_log).unwrap();
 
-        let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer el archivo");
+        let contenido = fs::read_to_string(path_log).expect("no se pudo leer el archivo");
 
         assert_eq!(contenido, "set \"clave\" \"valor\"\n");
+
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_03_append_linea_log_agrega_lineas() {
         use std::fs;
-
+        let path_log = ".test03.minikv.log";
         let _ = fs::remove_file(".minikv.log");
 
-        append_linea_log("set \"clave1\" \"valor1\"\n").unwrap();
-        append_linea_log("set \"clave2\" \"valor2\"\n").unwrap();
+        append_linea_log("set \"clave1\" \"valor1\"\n",path_log).unwrap();
+        append_linea_log("set \"clave2\" \"valor2\"\n",path_log).unwrap();
 
-        let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer el archivo");
+        let contenido = fs::read_to_string(path_log).expect("no se pudo leer el archivo");
 
         assert_eq!(
             contenido,
             "set \"clave1\" \"valor1\"\nset \"clave2\" \"valor2\"\n"
         );
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_04_append_linea_log_multiple_llamadas() {
         use std::fs;
 
+        let path_log = ".test04.minikv.log";
         let _ = fs::remove_file(".minikv.log");
 
         for i in 0..5 {
-            append_linea_log(&format!("set clave{} valor{}\n", i, i)).unwrap();
+            append_linea_log(&format!("set clave{} valor{}\n", i, i), path_log).unwrap();
         }
 
-        let contenido = fs::read_to_string(".minikv.log").unwrap();
+        let contenido = fs::read_to_string(path_log).unwrap();
 
         assert!(contenido.contains("clave0"));
         assert!(contenido.contains("clave4"));
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_05_sobrescribir_data_crea_y_escribe() {
         use std::fs;
+        let path_data = ".test05.minikv.data";
+        let _ = fs::remove_file(path_data);
 
-        let _ = fs::remove_file(".minikv.data");
+        sobrescribir_data("clave valor\n", path_data).unwrap();
 
-        sobrescribir_data("clave valor\n").unwrap();
-
-        let contenido = fs::read_to_string(".minikv.data").expect("no se pudo leer el archivo");
+        let contenido = fs::read_to_string(path_data).expect("no se pudo leer el archivo");
 
         assert_eq!(contenido, "clave valor\n");
+
+        let _ = fs::remove_file(path_data);
     }
     #[test]
     fn test_06_sobrescribir_data_reemplaza_contenido() {
         use std::fs;
+        let path_data = ".test06.minikv.data";
+        let _ = fs::remove_file(path_data);
 
-        let _ = fs::remove_file(".minikv.data");
+        sobrescribir_data("clave1 valor1\n", path_data).unwrap();
+        sobrescribir_data("clave2 valor2\n", path_data).unwrap();
 
-        sobrescribir_data("clave1 valor1\n").unwrap();
-        sobrescribir_data("clave2 valor2\n").unwrap();
-
-        let contenido = fs::read_to_string(".minikv.data").expect("no se pudo leer el archivo");
+        let contenido = fs::read_to_string(path_data).expect("no se pudo leer el archivo");
 
         assert_eq!(contenido, "clave2 valor2\n");
+
+        let _ = fs::remove_file(path_data);
     }
     #[test]
     fn test_07_sobrescribir_data_sobrescribe_contenido_vacio() {
         use std::fs;
+        let path_data = ".test07.minikv.data";
+        let _ = fs::remove_file(path_data);
 
-        let _ = fs::remove_file(".minikv.data");
+        sobrescribir_data("", path_data).unwrap();
 
-        sobrescribir_data("").unwrap();
-
-        let contenido = fs::read_to_string(".minikv.data").unwrap();
+        let contenido = fs::read_to_string(path_data).unwrap();
 
         assert_eq!(contenido, "");
+
+        let _ = fs::remove_file(path_data);
     }
     #[test]
     fn test_08_vaciar_log_elimina_contenido() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.log");
+        let path_log = ".test08.minikv.log";
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.log", "set clave valor\n").unwrap();
+        fs::write(path_log, "set clave valor\n").unwrap();
 
-        vaciar_log().unwrap();
+        vaciar_log(path_log).unwrap();
 
-        let contenido = fs::read_to_string(".minikv.log").unwrap();
+        let contenido = fs::read_to_string(path_log).unwrap();
 
         assert_eq!(contenido, "");
+
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_09_reconstruir_estado_solo_data() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_data = ".test09.minikv.data";
+        let path_log = ".test09.minikv.log";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.data", "clave1 valor1\nclave2 valor2\n").unwrap();
+        fs::write(path_data, "clave1 valor1\nclave2 valor2\n").unwrap();
 
-        let dic = reconstruir_estado().unwrap();
+        let dic = reconstruir_estado(path_data, path_log).unwrap();
 
         assert_eq!(dic.get("clave1"), Some(&"valor1".to_string()));
         assert_eq!(dic.get("clave2"), Some(&"valor2".to_string()));
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_10_reconstruir_estado_log_sobrescribe_data() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_data = ".test10.minikv.data";
+        let path_log = ".test10.minikv.log";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.data", "clave1 valor1\n").unwrap();
-        fs::write(".minikv.log", "set clave1 valor2\n").unwrap();
+        fs::write(path_data, "clave1 valor1\n").unwrap();
+        fs::write(path_log, "set clave1 valor2\n").unwrap();
 
-        let dic = reconstruir_estado().unwrap();
+        let dic = reconstruir_estado(path_data, path_log).unwrap();
 
         assert_eq!(dic.get("clave1"), Some(&"valor2".to_string()));
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_11_reconstruir_estado_unset() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_data = ".test11.minikv.data";
+        let path_log = ".test11.minikv.log";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.data", "clave1 valor1\n").unwrap();
-        fs::write(".minikv.log", "set clave1\n").unwrap();
+        fs::write(path_data, "clave1 valor1\n").unwrap();
+        fs::write(path_log, "set clave1\n").unwrap();
 
-        let dic = reconstruir_estado().unwrap();
+        let dic = reconstruir_estado(path_data, path_log).unwrap();
 
         assert_eq!(dic.get("clave1"), None);
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_12_reconstruir_estado_solo_log() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_data = ".test12.minikv.data";
+        let path_log = ".test12.minikv.log";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.log", "set clave1 valor1\nset clave2 valor2\n").unwrap();
 
-        let dic = reconstruir_estado().unwrap();
+        fs::write(path_log, "set clave1 valor1\nset clave2 valor2\n").unwrap();
+
+        let dic = reconstruir_estado(path_data, path_log).unwrap();
 
         assert_eq!(dic.get("clave1"), Some(&"valor1".to_string()));
         assert_eq!(dic.get("clave2"), Some(&"valor2".to_string()));
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_13_reconstruir_estado_sin_archivos() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_data = ".test13.minikv.data";
+        let path_log = ".test13.minikv.log";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        let dic = reconstruir_estado().unwrap();
+        let dic = reconstruir_estado(path_data, path_log).unwrap();
 
         assert_eq!(dic.len(), 0);
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
+
     }
     #[test]
     fn test_14_reconstruir_estado_linea_invalida() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_data = ".test14.minikv.data";
+        let path_log = ".test14.minikv.log";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.data", "esta es una linea invalida\n").unwrap();
+        fs::write(path_data, "esta es una linea invalida\n").unwrap();
 
-        let resultado = reconstruir_estado();
+        let resultado = reconstruir_estado(path_data, path_log);
 
         assert!(resultado.is_err());
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_15_cargar_data_en_memoria_correcta() {
         use std::collections::HashMap;
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
+        let path_data = ".test15.minikv.data";
+        let _ = fs::remove_file(path_data);
 
-        fs::write(".minikv.data", "clave1 valor1\nclave2 valor2\n").unwrap();
+        fs::write(path_data, "clave1 valor1\nclave2 valor2\n").unwrap();
 
         let mut dic = HashMap::new();
 
-        cargar_data_en_memoria(&mut dic).unwrap();
+        cargar_data_en_memoria(&mut dic, path_data).unwrap();
 
         assert_eq!(dic.get("clave1"), Some(&"valor1".to_string()));
         assert_eq!(dic.get("clave2"), Some(&"valor2".to_string()));
+        let _ = fs::remove_file(path_data);
     }
     #[test]
     fn test_16_cargar_data_en_memoria_linea_invalida() {
         use std::collections::HashMap;
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
+        let path_data = ".test16.minikv.data";
+        let _ = fs::remove_file(path_data);
 
-        fs::write(".minikv.data", "clave1 valor1 extra\n").unwrap(); // inválida
+        fs::write(path_data, "clave1 valor1 extra\n").unwrap(); // inválida
 
         let mut dic = HashMap::new();
 
-        let resultado = cargar_data_en_memoria(&mut dic);
+        let resultado = cargar_data_en_memoria(&mut dic, path_data);
 
         assert!(resultado.is_err());
+
+        let _ = fs::remove_file(path_data);
     }
     #[test]
     fn test_17_cargar_log_en_memoria_la_clave_2_fue_actualizada_y_la_clave_1_fue_eliminada() {
         use std::collections::HashMap;
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.log");
-
-        // set + update + unset
+        let path_log = ".test17.minikv.log";
+        let _ = fs::remove_file(path_log);
         fs::write(
-            ".minikv.log",
+            path_log,
             "set clave1 valor1\nset clave2 valor2\nset clave1 valor3\nset clave2\n",
         )
         .unwrap();
 
         let mut dic = HashMap::new();
 
-        cargar_log_en_memoria(&mut dic).unwrap();
+        cargar_log_en_memoria(&mut dic, path_log).unwrap();
 
         // clave1 fue actualizada
         assert_eq!(dic.get("clave1"), Some(&"valor3".to_string()));
 
         // clave2 fue eliminada
         assert_eq!(dic.get("clave2"), None);
+
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_18_cargar_log_en_memoria_linea_invalida() {
         use std::collections::HashMap;
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.log");
+        let path_log = ".test18.minikv.log";
+        let _ = fs::remove_file(path_log);
 
-        fs::write(".minikv.log", "comando invalido\n").unwrap();
+        fs::write(path_log, "comando invalido\n").unwrap();
 
         let mut dic = HashMap::new();
 
-        let resultado = cargar_log_en_memoria(&mut dic);
+        let resultado = cargar_log_en_memoria(&mut dic, path_log);
 
         assert!(resultado.is_err());
+
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_19_validar_linea_log_valida_con_valor() {

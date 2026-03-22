@@ -28,7 +28,7 @@ use crate::storage::vaciar_log;
 /// - Si la clave ya existe, su valor será sobrescrito en futuras reconstrucciones
 ///   del estado.
 /// - Esta función no modifica el estado en memoria, solo registra la operación.
-pub fn comando_set(clave: String, valor: String) -> Result<(), ErrorMiniKv> {
+pub fn comando_set(clave: String, valor: String,path_log: &str) -> Result<(), ErrorMiniKv> {
     let clave_log = serializar(&clave);
     let valor_log = serializar(&valor);
     let mut linea_log: String = String::new();
@@ -37,7 +37,7 @@ pub fn comando_set(clave: String, valor: String) -> Result<(), ErrorMiniKv> {
     linea_log.push(' ');
     linea_log.push_str(&valor_log);
     linea_log.push('\n');
-    let resultado = append_linea_log(&linea_log);
+    let resultado = append_linea_log(&linea_log,path_log);
     match resultado {
         Ok(()) => Ok(()),
         Err(e) => Err(e),
@@ -66,13 +66,13 @@ pub fn comando_set(clave: String, valor: String) -> Result<(), ErrorMiniKv> {
 /// - Si la clave existe, será eliminada en la reconstrucción del estado.
 /// - Si la clave no existe, la operación no produce errores.
 /// - Esta función solo registra la operación.
-pub fn comando_unset(clave: String) -> Result<(), ErrorMiniKv> {
+pub fn comando_unset(clave: String,path_log: &str) -> Result<(), ErrorMiniKv> {
     let clave_log = serializar(&clave);
     let mut linea_log: String = String::new();
     linea_log.push_str("set ");
     linea_log.push_str(&clave_log);
     linea_log.push('\n');
-    let resultado = append_linea_log(&linea_log);
+    let resultado = append_linea_log(&linea_log,path_log);
     match resultado {
         Ok(()) => Ok(()),
         Err(e) => Err(e),
@@ -101,8 +101,8 @@ pub fn comando_unset(clave: String) -> Result<(), ErrorMiniKv> {
 /// - Se utiliza `remove`, por lo que la clave es eliminada del diccionario temporal.
 ///   Esto no afecta al almacenamiento persistente.
 /// - No modifica los archivos `.data` ni `.log`.
-pub fn comando_get(clave: String) -> Result<Option<String>, ErrorMiniKv> {
-    let respuesta = reconstruir_estado();
+pub fn comando_get(clave: String, path_log: &str,path_data: &str) -> Result<Option<String>, ErrorMiniKv> {
+    let respuesta = reconstruir_estado(path_data, path_log);
     match respuesta {
         Ok(mut diccionario) => Ok(diccionario.remove(&clave)),
         Err(e) => Err(e),
@@ -124,8 +124,8 @@ pub fn comando_get(clave: String) -> Result<Option<String>, ErrorMiniKv> {
 ///
 /// - El resultado puede ser `0` si no hay claves almacenadas.
 /// - No modifica el estado en memoria persistente ni los archivos.
-pub fn comando_length() -> Result<usize, ErrorMiniKv> {
-    let respuesta = reconstruir_estado();
+pub fn comando_length(path_data: &str, path_log: &str) -> Result<usize, ErrorMiniKv> {
+    let respuesta = reconstruir_estado(path_data, path_log);
     match respuesta {
         Ok(diccionario) => Ok(diccionario.len()),
         Err(e) => Err(e),
@@ -161,8 +161,8 @@ pub fn comando_length() -> Result<usize, ErrorMiniKv> {
 /// # Notas
 ///
 /// - Las claves y valores se serializan antes de ser escritos en `.data`.
-pub fn comando_snapshot() -> Result<(), ErrorMiniKv> {
-    let respuesta = reconstruir_estado();
+pub fn comando_snapshot(path_data: &str, path_log: &str) -> Result<(), ErrorMiniKv> {
+    let respuesta = reconstruir_estado(path_data, path_log);
     match respuesta {
         Ok(diccionario) => {
             let mut contenido = String::new();
@@ -176,8 +176,8 @@ pub fn comando_snapshot() -> Result<(), ErrorMiniKv> {
                 linea.push('\n');
                 contenido.push_str(&linea);
             }
-            sobrescribir_data(&contenido)?;
-            vaciar_log()?;
+            sobrescribir_data(&contenido,path_data)?;
+            vaciar_log(path_log)?;
             Ok(())
         }
         Err(e) => Err(e),
@@ -191,80 +191,106 @@ mod tests {
     #[test]
     fn test_01_integracion_set_get() {
         use std::fs;
+        let path_log = ".test.integracion01.minikv.log";
+        let path_data = ".test.integracion01.minikv.data";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
 
-        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
-
-        let resultado = comando_get("clave1".to_string()).unwrap();
+        let resultado = comando_get("clave1".to_string(), path_log, path_data).unwrap();
 
         assert_eq!(resultado, Some("valor1".to_string()));
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
 
     #[test]
     fn test_02_integracion_set_sobrescritura() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_log = ".test.integracion02.minikv.log";
+        let path_data = ".test.integracion02.minikv.data";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
-        comando_set("clave1".to_string(), "valor2".to_string()).unwrap();
+        comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
+        comando_set("clave1".to_string(), "valor2".to_string(), path_log).unwrap();
 
-        let resultado = comando_get("clave1".to_string()).unwrap();
+        let resultado = comando_get("clave1".to_string(), path_log, path_data).unwrap();
 
         assert_eq!(resultado, Some("valor2".to_string()));
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
 
     #[test]
     fn test_03_integracion_unset() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
 
-        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
-        comando_unset("clave1".to_string()).unwrap();
+        let path_log = ".test.integracion03.minikv.log";
+        let path_data = ".test.integracion03.minikv.data";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        let resultado = comando_get("clave1".to_string()).unwrap();
+        comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
+        comando_unset("clave1".to_string(), path_log).unwrap();
+
+        let resultado = comando_get("clave1".to_string(), path_log, path_data).unwrap();
 
         assert_eq!(resultado, None);
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
 
     #[test]
     fn test_04_integracion_snapshot() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_log = ".test.integracion04.minikv.log";
+        let path_data = ".test.integracion04.minikv.data";
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
-        comando_set("clave2".to_string(), "valor2".to_string()).unwrap();
+        comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
+        comando_set("clave2".to_string(), "valor2".to_string(), path_log).unwrap();
 
-        comando_snapshot().unwrap();
+        comando_snapshot(path_data, path_log).unwrap();
 
         // después del snapshot, el log debería estar vacío
-        let log = fs::read_to_string(".minikv.log").unwrap();
+        let log = fs::read_to_string(path_log).unwrap();
         assert_eq!(log, "");
 
         // y los datos deben estar en .data
-        let data = fs::read_to_string(".minikv.data").unwrap();
+        let data = fs::read_to_string(path_data).unwrap();
         assert!(data.contains("clave1"));
         assert!(data.contains("clave2"));
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
     #[test]
     fn test_05_integracion_length() {
         use std::fs;
 
-        let _ = fs::remove_file(".minikv.data");
-        let _ = fs::remove_file(".minikv.log");
+        let path_log = ".test.integracion05.minikv.log";
+        let path_data = ".test.integracion05.minikv.data";
 
-        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
-        comando_set("clave2".to_string(), "valor2".to_string()).unwrap();
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
 
-        let resultado = comando_length().unwrap();
+        comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
+        comando_set("clave2".to_string(), "valor2".to_string(), path_log).unwrap();
+
+        let resultado = comando_length(path_data, path_log).unwrap();
 
         assert_eq!(resultado, 2);
+
+        let _ = fs::remove_file(path_data);
+        let _ = fs::remove_file(path_log);
     }
 }

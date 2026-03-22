@@ -30,6 +30,8 @@ use std::env;
 /// - Si los argumentos no coinciden con ningún comando válido, se informa
 ///   que el comando no fue reconocido.
 fn main() {
+    let path_log = ".minikv.log";
+    let path_data = ".minikv.data";
     let mut args = env::args();
     args.next();
     let comando_option: Option<String> = args.next();
@@ -38,32 +40,32 @@ fn main() {
 
     match (comando_option, clave_option, valor_option) {
         (Some(comando), Some(clave), Some(valor)) if comando == "set" => {
-            if let Err(e) = comando_set(clave, valor) {
+            if let Err(e) = comando_set(clave, valor, path_log) {
                 errores::imprimir_error(e);
             } else {
                 println!("OK");
             }
         }
         (Some(comando), Some(clave), None) if comando == "set" => {
-            if let Err(e) = comando_unset(clave) {
+            if let Err(e) = comando_unset(clave, path_log) {
                 errores::imprimir_error(e);
             } else {
                 println!("OK");
             }
         }
         (Some(comando), Some(clave), None) if comando == "get" => {
-            match comandos::comando_get(clave) {
+            match comandos::comando_get(clave, path_log, path_data) {
                 Ok(Some(valor)) => println!("{}", valor),
                 Ok(None) => println!("NOT FOUND"),
                 Err(e) => errores::imprimir_error(e),
             }
         }
-        (Some(comando), None, None) if comando == "length" => match comandos::comando_length() {
+        (Some(comando), None, None) if comando == "length" => match comandos::comando_length(path_log, path_data) {
             Ok(cantidad) => println!("{}", cantidad),
             Err(e) => errores::imprimir_error(e),
         },
         (Some(comando), None, None) if comando == "snapshot" => {
-            if let Err(e) = comandos::comando_snapshot() {
+            if let Err(e) = comandos::comando_snapshot(path_data, path_log) {
                 errores::imprimir_error(e);
             } else {
                 println!("OK");
