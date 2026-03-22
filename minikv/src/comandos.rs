@@ -189,38 +189,82 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_01_comando_set_crea_archivo() {
+    fn test_01_integracion_set_get() {
         use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
         let _ = fs::remove_file(".minikv.log");
-        let _ = comando_set("clave1".to_string(), "valor1".to_string());
-        assert!(fs::metadata(".minikv.log").is_ok());
+
+        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
+
+        let resultado = comando_get("clave1".to_string()).unwrap();
+
+        assert_eq!(resultado, Some("valor1".to_string()));
+    }
+
+    #[test]
+    fn test_02_integracion_set_sobrescritura() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
+        comando_set("clave1".to_string(), "valor2".to_string()).unwrap();
+
+        let resultado = comando_get("clave1".to_string()).unwrap();
+
+        assert_eq!(resultado, Some("valor2".to_string()));
+    }
+
+    #[test]
+    fn test_03_integracion_unset() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
+        comando_unset("clave1".to_string()).unwrap();
+
+        let resultado = comando_get("clave1".to_string()).unwrap();
+
+        assert_eq!(resultado, None);
+    }
+
+    #[test]
+    fn test_04_integracion_snapshot() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
+        comando_set("clave2".to_string(), "valor2".to_string()).unwrap();
+
+        comando_snapshot().unwrap();
+
+        // después del snapshot, el log debería estar vacío
+        let log = fs::read_to_string(".minikv.log").unwrap();
+        assert_eq!(log, "");
+
+        // y los datos deben estar en .data
+        let data = fs::read_to_string(".minikv.data").unwrap();
+        assert!(data.contains("clave1"));
+        assert!(data.contains("clave2"));
     }
     #[test]
-    fn test_02_comando_set_escribe_linea_en_log() {
+    fn test_05_integracion_length() {
         use std::fs;
 
+        let _ = fs::remove_file(".minikv.data");
         let _ = fs::remove_file(".minikv.log");
 
-        let _ = comando_set("clave1".to_string(), "valor1".to_string());
+        comando_set("clave1".to_string(), "valor1".to_string()).unwrap();
+        comando_set("clave2".to_string(), "valor2".to_string()).unwrap();
 
-        let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer .minikv.log");
+        let resultado = comando_length().unwrap();
 
-        assert_eq!(contenido, "set \"clave1\" \"valor1\"\n");
-    }
-    #[test]
-    fn test_03_comando_unset_crea_archivo() {
-        use std::fs;
-        let _ = fs::remove_file(".minikv.log");
-        let _ = comando_unset("clave1".to_string());
-        assert!(fs::metadata(".minikv.log").is_ok());
-    }
-    #[test]
-    fn test_04_comando_unset_escribe_linea_en_log() {
-        use std::fs;
-        let _ = fs::remove_file(".minikv.log");
-        let _ = comando_unset("clave1".to_string());
-        let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer .minikv.log");
-
-        assert_eq!(contenido, "set \"clave1\"\n");
+        assert_eq!(resultado, 2);
     }
 }
