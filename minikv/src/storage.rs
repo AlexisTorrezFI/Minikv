@@ -289,13 +289,12 @@ fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_append_crea_archivo() {
+    fn test_01_append_linea_log_crea_archivo() {
         use std::fs;
 
         let _ = fs::remove_file(".minikv.log");
@@ -305,20 +304,19 @@ mod tests {
         assert!(fs::metadata(".minikv.log").is_ok());
     }
     #[test]
-    fn test_append_escribe_linea() {
+    fn test_02_append_linea_log_escribe_linea() {
         use std::fs;
 
         let _ = fs::remove_file(".minikv.log");
 
         append_linea_log("set clave valor\n").unwrap();
 
-        let contenido = fs::read_to_string(".minikv.log")
-            .expect("no se pudo leer el archivo");
+        let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer el archivo");
 
         assert_eq!(contenido, "set clave valor\n");
     }
     #[test]
-    fn test_append_agrega_lineas() {
+    fn test_03_append_linea_log_agrega_lineas() {
         use std::fs;
 
         let _ = fs::remove_file(".minikv.log");
@@ -326,16 +324,12 @@ mod tests {
         append_linea_log("set clave1 valor1\n").unwrap();
         append_linea_log("set clave2 valor2\n").unwrap();
 
-        let contenido = fs::read_to_string(".minikv.log")
-            .expect("no se pudo leer el archivo");
+        let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer el archivo");
 
-        assert_eq!(
-            contenido,
-            "set clave1 valor1\nset clave2 valor2\n"
-        );
+        assert_eq!(contenido, "set clave1 valor1\nset clave2 valor2\n");
     }
     #[test]
-    fn test_append_multiple_llamadas() {
+    fn test_04_append_linea_log_multiple_llamadas() {
         use std::fs;
 
         let _ = fs::remove_file(".minikv.log");
@@ -349,5 +343,247 @@ mod tests {
         assert!(contenido.contains("clave0"));
         assert!(contenido.contains("clave4"));
     }
+    #[test]
+    fn test_05_sobrescribir_data_crea_y_escribe() {
+        use std::fs;
 
+        let _ = fs::remove_file(".minikv.data");
+
+        sobrescribir_data("clave valor\n").unwrap();
+
+        let contenido = fs::read_to_string(".minikv.data").expect("no se pudo leer el archivo");
+
+        assert_eq!(contenido, "clave valor\n");
+    }
+    #[test]
+    fn test_06_sobrescribir_data_reemplaza_contenido() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+
+        sobrescribir_data("clave1 valor1\n").unwrap();
+        sobrescribir_data("clave2 valor2\n").unwrap();
+
+        let contenido = fs::read_to_string(".minikv.data").expect("no se pudo leer el archivo");
+
+        assert_eq!(contenido, "clave2 valor2\n");
+    }
+    #[test]
+    fn test_07_sobrescribir_data_sobrescribe_contenido_vacio() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+
+        sobrescribir_data("").unwrap();
+
+        let contenido = fs::read_to_string(".minikv.data").unwrap();
+
+        assert_eq!(contenido, "");
+    }
+    #[test]
+    fn test_08_vaciar_log_elimina_contenido() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.log", "set clave valor\n").unwrap();
+
+        vaciar_log().unwrap();
+
+        let contenido = fs::read_to_string(".minikv.log").unwrap();
+
+        assert_eq!(contenido, "");
+    }
+    #[test]
+    fn test_09_reconstruir_estado_solo_data() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.data", "clave1 valor1\nclave2 valor2\n").unwrap();
+
+        let dic = reconstruir_estado().unwrap();
+
+        assert_eq!(dic.get("clave1"), Some(&"valor1".to_string()));
+        assert_eq!(dic.get("clave2"), Some(&"valor2".to_string()));
+    }
+    #[test]
+    fn test_10_reconstruir_estado_log_sobrescribe_data() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.data", "clave1 valor1\n").unwrap();
+        fs::write(".minikv.log", "set clave1 valor2\n").unwrap();
+
+        let dic = reconstruir_estado().unwrap();
+
+        assert_eq!(dic.get("clave1"), Some(&"valor2".to_string()));
+    }
+    #[test]
+    fn test_11_reconstruir_estado_unset() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.data", "clave1 valor1\n").unwrap();
+        fs::write(".minikv.log", "set clave1\n").unwrap();
+
+        let dic = reconstruir_estado().unwrap();
+
+        assert_eq!(dic.get("clave1"), None);
+    }
+    #[test]
+    fn test_12_reconstruir_estado_solo_log() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.log", "set clave1 valor1\nset clave2 valor2\n").unwrap();
+
+        let dic = reconstruir_estado().unwrap();
+
+        assert_eq!(dic.get("clave1"), Some(&"valor1".to_string()));
+        assert_eq!(dic.get("clave2"), Some(&"valor2".to_string()));
+    }
+    #[test]
+    fn test_13_reconstruir_estado_sin_archivos() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        let dic = reconstruir_estado().unwrap();
+
+        assert_eq!(dic.len(), 0);
+    }
+    #[test]
+    fn test_14_reconstruir_estado_linea_invalida() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.data", "esta es una linea invalida\n").unwrap();
+
+        let resultado = reconstruir_estado();
+
+        assert!(resultado.is_err());
+    }
+    #[test]
+    fn test_15_cargar_data_en_memoria_correcta() {
+        use std::collections::HashMap;
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+
+        fs::write(".minikv.data", "clave1 valor1\nclave2 valor2\n").unwrap();
+
+        let mut dic = HashMap::new();
+
+        cargar_data_en_memoria(&mut dic).unwrap();
+
+        assert_eq!(dic.get("clave1"), Some(&"valor1".to_string()));
+        assert_eq!(dic.get("clave2"), Some(&"valor2".to_string()));
+    }
+    #[test]
+    fn test_16_cargar_data_en_memoria_linea_invalida() {
+        use std::collections::HashMap;
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.data");
+
+        fs::write(".minikv.data", "clave1 valor1 extra\n").unwrap(); // inválida
+
+        let mut dic = HashMap::new();
+
+        let resultado = cargar_data_en_memoria(&mut dic);
+
+        assert!(resultado.is_err());
+    }
+    #[test]
+    fn test_17_cargar_log_en_memoria_la_clave_2_fue_actualizada_y_la_clave_1_fue_eliminada() {
+        use std::collections::HashMap;
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        // set + update + unset
+        fs::write(
+            ".minikv.log",
+            "set clave1 valor1\nset clave2 valor2\nset clave1 valor3\nset clave2\n",
+        )
+        .unwrap();
+
+        let mut dic = HashMap::new();
+
+        cargar_log_en_memoria(&mut dic).unwrap();
+
+        // clave1 fue actualizada
+        assert_eq!(dic.get("clave1"), Some(&"valor3".to_string()));
+
+        // clave2 fue eliminada
+        assert_eq!(dic.get("clave2"), None);
+    }
+    #[test]
+    fn test_18_cargar_log_en_memoria_linea_invalida() {
+        use std::collections::HashMap;
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        fs::write(".minikv.log", "comando invalido\n").unwrap();
+
+        let mut dic = HashMap::new();
+
+        let resultado = cargar_log_en_memoria(&mut dic);
+
+        assert!(resultado.is_err());
+    }
+    #[test]
+    fn test_19_validar_linea_log_valida_con_valor() {
+        let resultado = validar_linea_log("set clave valor");
+
+        assert!(resultado.is_ok());
+    }
+    #[test]
+    fn test_20_validar_linea_log_valida_unset() {
+        let resultado = validar_linea_log("set clave");
+
+        assert!(resultado.is_ok());
+    }
+    #[test]
+    fn test_21_validar_linea_log_comando_invalido() {
+        let resultado = validar_linea_log("get clave valor");
+
+        assert!(resultado.is_err());
+    }
+    #[test]
+    fn test_22_validar_linea_log_argumentos_invalidos() {
+        let resultado = validar_linea_log("set");
+
+        assert!(resultado.is_err());
+    }
+    #[test]
+    fn test_23_validar_linea_data_valida() {
+        let resultado = validar_linea_data("clave valor");
+
+        assert!(resultado.is_ok());
+    }
+    #[test]
+    fn test_24_validar_linea_data_muchos_argumentos() {
+        let resultado = validar_linea_data("clave valor extra");
+
+        assert!(resultado.is_err());
+    }
+    #[test]
+    fn test_25_validar_linea_data_pocos_argumentos() {
+        let resultado = validar_linea_data("clave");
+
+        assert!(resultado.is_err());
+    }
 }
