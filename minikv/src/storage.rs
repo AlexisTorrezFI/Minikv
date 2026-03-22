@@ -232,6 +232,22 @@ fn cargar_log_en_memoria(diccionario: &mut HashMap<String, String>) -> Result<()
     Ok(())
 }
 
+/// Valida el formato de una línea del archivo `.minikv.log`.
+///
+/// Una línea válida debe cumplir con uno de los siguientes formatos:
+/// - `set clave valor`
+/// - `set clave`
+///
+/// En ambos casos, el primer elemento debe ser el comando `set`.
+///
+/// # Parámetros
+///
+/// - `linea`: línea del archivo log a validar.
+///
+/// # Retorna
+///
+/// - `Ok(())` si la línea tiene un formato válido.
+/// - `Err(ErrorMiniKv::LineaInvalida)` si la línea no cumple con el formato esperado.
 fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
     let partes = separar_argumentos(linea);
     match partes.len() {
@@ -252,10 +268,86 @@ fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
     Ok(())
 }
 
+/// Valida el formato de una línea del archivo `.minikv.data`.
+///
+/// Una línea válida debe contener exactamente dos elementos:
+/// - `clave valor`
+///
+/// # Parámetros
+///
+/// - `linea`: línea del archivo data a validar.
+///
+/// # Retorna
+///
+/// - `Ok(())` si la línea tiene un formato válido.
+/// - `Err(ErrorMiniKv::LineaInvalida)` si la línea no cumple con el formato esperado.
 fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
     let partes = separar_argumentos(linea);
     if partes.len() != 2 {
         return Err(ErrorMiniKv::LineaInvalida);
     }
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_append_crea_archivo() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        append_linea_log("set clave valor\n").unwrap();
+
+        assert!(fs::metadata(".minikv.log").is_ok());
+    }
+    #[test]
+    fn test_append_escribe_linea() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        append_linea_log("set clave valor\n").unwrap();
+
+        let contenido = fs::read_to_string(".minikv.log")
+            .expect("no se pudo leer el archivo");
+
+        assert_eq!(contenido, "set clave valor\n");
+    }
+    #[test]
+    fn test_append_agrega_lineas() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        append_linea_log("set clave1 valor1\n").unwrap();
+        append_linea_log("set clave2 valor2\n").unwrap();
+
+        let contenido = fs::read_to_string(".minikv.log")
+            .expect("no se pudo leer el archivo");
+
+        assert_eq!(
+            contenido,
+            "set clave1 valor1\nset clave2 valor2\n"
+        );
+    }
+    #[test]
+    fn test_append_multiple_llamadas() {
+        use std::fs;
+
+        let _ = fs::remove_file(".minikv.log");
+
+        for i in 0..5 {
+            append_linea_log(&format!("set clave{} valor{}\n", i, i)).unwrap();
+        }
+
+        let contenido = fs::read_to_string(".minikv.log").unwrap();
+
+        assert!(contenido.contains("clave0"));
+        assert!(contenido.contains("clave4"));
+    }
+
 }

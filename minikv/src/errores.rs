@@ -5,6 +5,7 @@
 ///
 /// Cada variante representa un tipo específico de error que puede
 /// ocurrir durante la ejecución del programa.
+#[derive(Debug)]
 pub enum ErrorMiniKv {
     /// No se pudo abrir o crear un archivo.
     NoSePudoAbrirArchivo,
