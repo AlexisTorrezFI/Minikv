@@ -205,7 +205,7 @@ mod tests {
 
         let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer .minikv.log");
 
-        assert_eq!(contenido, "set clave1 valor1\n");
+        assert_eq!(contenido, "set \"clave1\" \"valor1\"\n");
     }
     #[test]
     fn test_03_comando_unset_crea_archivo() {
@@ -221,6 +221,6 @@ mod tests {
         let _ = comando_unset("clave1".to_string());
         let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer .minikv.log");
 
-        assert_eq!(contenido, "set clave1\n");
+        assert_eq!(contenido, "set \"clave1\"\n");
     }
 }

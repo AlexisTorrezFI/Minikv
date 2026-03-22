@@ -309,11 +309,11 @@ mod tests {
 
         let _ = fs::remove_file(".minikv.log");
 
-        append_linea_log("set clave valor\n").unwrap();
+        append_linea_log("set \"clave\" \"valor\"\n").unwrap();
 
         let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer el archivo");
 
-        assert_eq!(contenido, "set clave valor\n");
+        assert_eq!(contenido, "set \"clave\" \"valor\"\n");
     }
     #[test]
     fn test_03_append_linea_log_agrega_lineas() {
@@ -321,12 +321,15 @@ mod tests {
 
         let _ = fs::remove_file(".minikv.log");
 
-        append_linea_log("set clave1 valor1\n").unwrap();
-        append_linea_log("set clave2 valor2\n").unwrap();
+        append_linea_log("set \"clave1\" \"valor1\"\n").unwrap();
+        append_linea_log("set \"clave2\" \"valor2\"\n").unwrap();
 
         let contenido = fs::read_to_string(".minikv.log").expect("no se pudo leer el archivo");
 
-        assert_eq!(contenido, "set clave1 valor1\nset clave2 valor2\n");
+        assert_eq!(
+            contenido,
+            "set \"clave1\" \"valor1\"\nset \"clave2\" \"valor2\"\n"
+        );
     }
     #[test]
     fn test_04_append_linea_log_multiple_llamadas() {

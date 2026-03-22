@@ -83,15 +83,11 @@ pub fn serializar(texto: &str) -> String {
         }
         resultado.push(c);
     }
-    if resultado.contains(' ') {
-        let mut final_str = String::new();
-        final_str.push('"');
-        final_str.push_str(&resultado);
-        final_str.push('"');
-        final_str
-    } else {
-        resultado
-    }
+    let mut final_str = String::new();
+    final_str.push('"');
+    final_str.push_str(&resultado);
+    final_str.push('"');
+    final_str
 }
 
 #[cfg(test)]
@@ -101,7 +97,7 @@ mod tests {
     #[test]
     fn test_01_serializar_valor_simple_con_comillas() {
         let resultado = serializar("valor1");
-        assert_eq!(resultado, "valor1");
+        assert_eq!(resultado, "\"valor1\"");
     }
     #[test]
     fn test_02_serializar_valor_con_espacio() {
@@ -111,7 +107,7 @@ mod tests {
     #[test]
     fn test_03_serializar_valor_con_comillas() {
         let resultado = serializar("valor\"3");
-        assert_eq!(resultado, "valor\\\"3");
+        assert_eq!(resultado, "\"valor\\\"3\"");
     }
     #[test]
     fn test_04_serializar_valor_con_comillas_y_espacio() {
