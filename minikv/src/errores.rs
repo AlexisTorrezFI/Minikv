@@ -1,29 +1,33 @@
 /// Enum que representa los posibles errores del sistema MiniKV.
 ///
-/// Este tipo se utiliza para modelar fallos durante operaciones de
-/// lectura, escritura y validación de datos en los archivos.
-///
-/// Cada variante representa un tipo específico de error que puede
-/// ocurrir durante la ejecución del programa.
-#[derive(Debug)]
+/// Este tipo modela los errores permitidos por la especificación del TP.
+/// Cada variante corresponde a un código de error válido que debe ser
+/// mostrado al usuario en el formato `ERROR: [TIPO]`.
+#[derive(Debug, PartialEq, Eq)]
 pub enum ErrorMiniKv {
-    /// No se pudo abrir o crear un archivo.
-    NoSePudoAbrirArchivo,
+    /// La clave solicitada no existe.
+    NotFound,
 
-    /// No se pudo leer el contenido de un archivo.
-    NoSePudoLeerArchivo,
+    /// Se proporcionaron más argumentos de los esperados.
+    ExtraArgument,
 
-    /// Ocurrió un error al escribir en un archivo.
-    NoSePudoEscribirArchivo,
+    /// El archivo `.minikv.data` es inválido o no se pudo procesar.
+    InvalidDataFile,
 
-    /// Una línea del archivo no cumple con el formato esperado.
-    LineaInvalida,
+    /// El archivo `.minikv.log` es inválido o no se pudo procesar.
+    InvalidLogFile,
+
+    /// Faltan argumentos requeridos para el comando.
+    MissingArgument,
+
+    /// El comando ingresado no es reconocido.
+    UnknownCommand,
 }
 
-/// Imprime un mensaje de error correspondiente a un `ErrorMiniKv`.
+/// Imprime un mensaje de error en el formato requerido por el TP.
 ///
-/// Esta función traduce cada variante del enum a un mensaje legible
-/// para el usuario.
+/// Traduce cada variante de `ErrorMiniKv` al formato:
+/// `ERROR: [TIPO]`
 ///
 /// # Parámetros
 ///
@@ -31,21 +35,15 @@ pub enum ErrorMiniKv {
 ///
 /// # Comportamiento
 ///
-/// - Muestra un mensaje descriptivo por consola según el tipo de error.
+/// - Imprime el código de error correspondiente por consola.
 /// - No devuelve ningún valor.
 pub fn imprimir_error(e: ErrorMiniKv) {
     match e {
-        ErrorMiniKv::NoSePudoAbrirArchivo => {
-            println!("Error: no se pudo abrir el archivo");
-        }
-        ErrorMiniKv::NoSePudoLeerArchivo => {
-            println!("Error: no se pudo leer el archivo");
-        }
-        ErrorMiniKv::NoSePudoEscribirArchivo => {
-            println!("Error: no se pudo escribir el archivo");
-        }
-        ErrorMiniKv::LineaInvalida => {
-            println!("Error: línea inválida en el archivo");
-        }
+        ErrorMiniKv::NotFound => println!("ERROR: NOT FOUND"),
+        ErrorMiniKv::ExtraArgument => println!("ERROR: EXTRA ARGUMENT"),
+        ErrorMiniKv::InvalidDataFile => println!("ERROR: INVALID DATA FILE"),
+        ErrorMiniKv::InvalidLogFile => println!("ERROR: INVALID LOG FILE"),
+        ErrorMiniKv::MissingArgument => println!("ERROR: MISSING ARGUMENT"),
+        ErrorMiniKv::UnknownCommand => println!("ERROR: UNKNOWN COMMAND"),
     }
 }

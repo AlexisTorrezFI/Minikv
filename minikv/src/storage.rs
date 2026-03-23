@@ -6,48 +6,51 @@ use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::io::Write;
 
-/// Agrega una línea al archivo .minikv.log.
+/// Agrega una línea al archivo de la ruta pasada por parámetro.
 ///
 /// Crea el archivo si no existe y escribe la línea al final.
-///
+/// # Parámetros
+/// - `linea`: texto a agregar al archivo, se asume que termina con un salto de línea (`\n`).
+/// - `path_log`: ruta al archivo de log donde se agregará la línea.
 /// # Errores
-/// - Devuelve `NoSePudoAbrirArchivo` si no se puede abrir o crear el archivo.
-/// - Devuelve `NoSePudoEscribirArchivo` si falla la escritura.
-pub fn append_linea_log(linea: &str, path_archivo: &str) -> Result<(), ErrorMiniKv> {
+/// - Devuelve `InvalidLogFile` si no se puede abrir o crear el archivo.
+/// - Devuelve `InvalidLogFile` si falla la escritura.
+pub fn append_linea_log(linea: &str, path_log: &str) -> Result<(), ErrorMiniKv> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(path_archivo)
-        .map_err(|_| ErrorMiniKv::NoSePudoAbrirArchivo)?;
+        .open(path_log)
+        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
     file.write_all(linea.as_bytes())
-        .map_err(|_| ErrorMiniKv::NoSePudoEscribirArchivo)?;
+        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
     Ok(())
 }
 
-/// Sobrescribe el archivo `.minikv.data` con el contenido proporcionado.
+/// Sobrescribe el archivo pasado por parámetro con el contenido proporcionado.
 ///
 /// Si el archivo no existe, se crea. Si ya existe, su contenido previo
 /// se elimina antes de escribir el nuevo.
 ///
 /// # Parámetros
 ///
-/// - `contenido`: texto que se escribirá en el archivo `.minikv.data`.
+/// - `contenido`: texto que se escribirá en el archivo.
+/// - `path`: ruta al archivo que se desea sobrescribir.
 ///
 /// # Retorna
 ///
 /// - `Ok(())` si el archivo se abre y se escribe correctamente.
-/// - `Err(ErrorMiniKv::NoSePudoAbrirArchivo)` si no se puede abrir o crear el archivo.
-/// - `Err(ErrorMiniKv::NoSePudoEscribirArchivo)` si ocurre un error al escribir.
-pub fn sobrescribir_data(contenido: &str, path_archivo: &str) -> Result<(), ErrorMiniKv> {
+/// - `Err(ErrorMiniKv::InvalidDataFile)` si no se puede abrir o crear el archivo.
+/// - `Err(ErrorMiniKv::InvalidDataFile)` si ocurre un error al escribir.
+pub fn sobrescribir_data(contenido: &str, path_data: &str) -> Result<(), ErrorMiniKv> {
     let mut archivo = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(path_archivo)
-        .map_err(|_| ErrorMiniKv::NoSePudoAbrirArchivo)?;
+        .open(path_data)
+        .map_err(|_| ErrorMiniKv::InvalidDataFile)?;
     archivo
         .write_all(contenido.as_bytes())
-        .map_err(|_| ErrorMiniKv::NoSePudoEscribirArchivo)?;
+        .map_err(|_| ErrorMiniKv::InvalidDataFile)?;
     Ok(())
 }
 
@@ -55,39 +58,52 @@ pub fn sobrescribir_data(contenido: &str, path_archivo: &str) -> Result<(), Erro
 ///
 /// Si el archivo no existe, se crea vacío. Si existe, su contenido se elimina.
 ///
+/// # Parámetros
+/// - `path_log`: ruta al archivo de log que se desea vaciar.
+///
+/// # Errores
+/// - Devuelve `Err(ErrorMiniKv::InvalidLogFile)` si no se puede abrir o crear el archivo.  
+///
 /// # Retorna
 ///
 /// - `Ok(())` si el archivo se abre correctamente y queda vacío.
-/// - `Err(ErrorMiniKv::NoSePudoAbrirArchivo)` si no se puede abrir o crear el archivo.
+/// - `Err(ErrorMiniKv::InvalidLogFile)` si no se puede abrir o crear el archivo.
 pub fn vaciar_log(path_log: &str) -> Result<(), ErrorMiniKv> {
     OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
         .open(path_log)
-        .map_err(|_| ErrorMiniKv::NoSePudoAbrirArchivo)?;
+        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
     Ok(())
 }
 
-/// Reconstruye el estado del MiniKV leyendo los archivos .data y .log.
+/// Reconstruye el estado del MiniKV leyendo los archivos de las rutas path_data y path_log.
 ///
 /// Primero carga los pares clave-valor desde .data, y luego aplica
 /// las operaciones del log para obtener el estado final.
 ///
+/// # Parámetros
+/// - `path_data`: ruta al archivo de datos que contiene los pares clave-valor.
+/// - `path_log`: ruta al archivo de log que contiene las operaciones a aplicar.
+///
 /// # Errores
 /// Devuelve un `ErrorMiniKv` en los siguientes casos:
-/// - `NoSePudoLeerArchivo` si falla la lectura de los archivos.
-/// - `LineaInvalida` si alguna línea no tiene el formato esperado.
-pub fn reconstruir_estado(path_data: &str, path_log: &str) -> Result<HashMap<String, String>, ErrorMiniKv> {
+/// - `InvalidDataFile` si falla la lectura del archivo de datos.
+/// - `InvalidLogFile` si falla la lectura del archivo de log.
+pub fn reconstruir_estado(
+    path_data: &str,
+    path_log: &str,
+) -> Result<HashMap<String, String>, ErrorMiniKv> {
     let mut diccionario = HashMap::new();
     cargar_data_en_memoria(&mut diccionario, path_data)?;
     cargar_log_en_memoria(&mut diccionario, path_log)?;
     Ok(diccionario)
 }
 
-/// Carga en memoria el contenido del archivo `.minikv.data`.
+/// Carga en memoria el contenido del archivo con el path proporcionado.
 ///
-/// Esta función intenta leer el archivo `.minikv.data` y, por cada línea,
+/// Esta función intenta leer el archivo y, por cada línea,
 /// parsea los pares clave-valor para insertarlos en el diccionario proporcionado.
 ///
 /// Si el archivo no existe, no se considera un error y simplemente no se realiza
@@ -102,6 +118,7 @@ pub fn reconstruir_estado(path_data: &str, path_log: &str) -> Result<HashMap<Str
 /// # Parámetros
 ///
 /// - `diccionario`: referencia mutable a un `HashMap` donde se cargarán los pares clave-valor.
+/// - `path_data`: ruta al archivo de datos que se desea cargar en memoria.
 ///
 /// # Errores
 ///
@@ -119,20 +136,23 @@ pub fn reconstruir_estado(path_data: &str, path_log: &str) -> Result<HashMap<Str
 ///
 /// - `Ok(())` si el .data se ha procesado correctamente.
 /// - `Err(ErrorMiniKv)` si ocurre un error de lectura o si alguna línea es inválida.
-fn cargar_data_en_memoria(diccionario: &mut HashMap<String, String>, path_data: &str) -> Result<(), ErrorMiniKv> {
+fn cargar_data_en_memoria(
+    diccionario: &mut HashMap<String, String>,
+    path_data: &str,
+) -> Result<(), ErrorMiniKv> {
     let contenido = match fs::read_to_string(path_data) {
         Ok(contenido) => contenido,
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
                 return Ok(());
             } else {
-                return Err(ErrorMiniKv::NoSePudoLeerArchivo);
+                return Err(ErrorMiniKv::InvalidDataFile);
             }
         }
     };
     for linea in contenido.lines() {
         if let Err(_e) = validar_linea_data(linea) {
-            return Err(ErrorMiniKv::LineaInvalida);
+            return Err(ErrorMiniKv::InvalidDataFile);
         }
         let partes = separar_argumentos(linea);
 
@@ -146,32 +166,26 @@ fn cargar_data_en_memoria(diccionario: &mut HashMap<String, String>, path_data: 
     Ok(())
 }
 
-/// Carga en memoria las operaciones registradas en el archivo `.minikv.log`.
+/// Carga en memoria las operaciones registradas en el archivo proporcionado.
 ///
-/// Esta función lee el archivo de log y aplica cada operación sobre el
+/// Esta función lee el archivo y aplica cada operación sobre el
 /// diccionario, reconstruyendo el estado final de este.
 ///
-/// Cada línea del log representa una operación:
+/// Cada línea del archivo representa una operación:
 /// - `set clave valor`: inserta o actualiza la clave con el valor.
 /// - `set clave`: elimina la clave del diccionario (unset).
 ///
 /// El log se procesa en orden, por lo que las operaciones posteriores
 /// sobrescriben o eliminan resultados anteriores.
 ///
-/// Si el archivo `.minikv.log` no existe, no se considera un error y
+/// Si el archivo con la ruta `path_log` no existe, no se considera un error y
 /// simplemente no se realizan cambios sobre el diccionario.
 ///
 /// # Parámetros
 ///
 /// - `diccionario`: referencia mutable al `HashMap` donde se aplicarán
 ///   las operaciones del log.
-///
-/// # Errores
-///
-/// Devuelve un `ErrorMiniKv` en los siguientes casos:
-///
-/// - `NoSePudoLeerArchivo`: si el archivo existe pero no se puede leer.
-/// - `LineaInvalida`: si alguna línea no cumple con el formato esperado.
+/// - `path_log`: ruta al archivo de log que se desea cargar en memoria.
 ///
 /// # Formato esperado del log
 ///
@@ -190,28 +204,31 @@ fn cargar_data_en_memoria(diccionario: &mut HashMap<String, String>, path_data: 
 ///
 /// # Errores
 ///
-/// Devuelve un `ErrorMiniKv` en el siguientes caso:
+/// Devuelve un `ErrorMiniKv` en el siguiente caso:
 ///
-/// - `LineaInvalida`: si alguna línea no cumple con el formato esperado.
+/// - `InvalidLogFile`: si alguna línea no cumple con el formato esperado.
 ///
 /// # Retorna
 ///
 /// - `Ok(())` si el log se procesa correctamente.
 /// - `Err(ErrorMiniKv)` si ocurre un error de lectura o si alguna línea es inválida.
-fn cargar_log_en_memoria(diccionario: &mut HashMap<String, String>, path_log: &str) -> Result<(), ErrorMiniKv> {
+fn cargar_log_en_memoria(
+    diccionario: &mut HashMap<String, String>,
+    path_log: &str,
+) -> Result<(), ErrorMiniKv> {
     let contenido = match fs::read_to_string(path_log) {
         Ok(contenido) => contenido,
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
                 return Ok(());
             } else {
-                return Err(ErrorMiniKv::NoSePudoLeerArchivo);
+                return Err(ErrorMiniKv::InvalidLogFile);
             }
         }
     };
     for linea in contenido.lines() {
         if let Err(_e) = validar_linea_log(linea) {
-            return Err(ErrorMiniKv::LineaInvalida);
+            return Err(ErrorMiniKv::InvalidLogFile);
         }
         let partes = separar_argumentos(linea);
         match partes.len() {
@@ -225,14 +242,14 @@ fn cargar_log_en_memoria(diccionario: &mut HashMap<String, String>, path_log: &s
                 diccionario.remove(clave);
             }
             _ => {
-                return Err(ErrorMiniKv::LineaInvalida);
+                return Err(ErrorMiniKv::InvalidLogFile);
             }
         }
     }
     Ok(())
 }
 
-/// Valida el formato de una línea del archivo `.minikv.log`.
+/// Valida el formato de una línea de un archivo de tipo log.
 ///
 /// Una línea válida debe cumplir con uno de los siguientes formatos:
 /// - `set clave valor`
@@ -247,44 +264,44 @@ fn cargar_log_en_memoria(diccionario: &mut HashMap<String, String>, path_log: &s
 /// # Retorna
 ///
 /// - `Ok(())` si la línea tiene un formato válido.
-/// - `Err(ErrorMiniKv::LineaInvalida)` si la línea no cumple con el formato esperado.
+/// - `Err(ErrorMiniKv::InvalidLogFile)` si la línea no cumple con el formato esperado.
 fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
     let partes = separar_argumentos(linea);
     match partes.len() {
         3 => {
             if partes[0] != "set" {
-                return Err(ErrorMiniKv::LineaInvalida);
+                return Err(ErrorMiniKv::InvalidLogFile);
             }
         }
         2 => {
             if partes[0] != "set" {
-                return Err(ErrorMiniKv::LineaInvalida);
+                return Err(ErrorMiniKv::InvalidLogFile);
             }
         }
         _ => {
-            return Err(ErrorMiniKv::LineaInvalida);
+            return Err(ErrorMiniKv::InvalidLogFile);
         }
     }
     Ok(())
 }
 
-/// Valida el formato de una línea del archivo `.minikv.data`.
+/// Valida el formato de una línea del archivo de tipo data.
 ///
 /// Una línea válida debe contener exactamente dos elementos:
 /// - `clave valor`
 ///
 /// # Parámetros
 ///
-/// - `linea`: línea del archivo data a validar.
+/// - `linea`: línea del archivo data a validar .
 ///
 /// # Retorna
 ///
 /// - `Ok(())` si la línea tiene un formato válido.
-/// - `Err(ErrorMiniKv::LineaInvalida)` si la línea no cumple con el formato esperado.
+/// - `Err(ErrorMiniKv::InvalidDataFile)` si la línea no cumple con el formato esperado.
 fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
     let partes = separar_argumentos(linea);
     if partes.len() != 2 {
-        return Err(ErrorMiniKv::LineaInvalida);
+        return Err(ErrorMiniKv::InvalidDataFile);
     }
     Ok(())
 }
@@ -301,12 +318,11 @@ mod tests {
         let path_log = ".test01.minikv.log";
         let _ = fs::remove_file(path_log);
 
-        append_linea_log("set clave valor\n",path_log).unwrap();
+        append_linea_log("set clave valor\n", path_log).unwrap();
 
         assert!(fs::metadata(path_log).is_ok());
 
         let _ = fs::remove_file(".test01.minikv.log");
-
     }
     #[test]
     fn test_02_append_linea_log_escribe_linea() {
@@ -315,7 +331,7 @@ mod tests {
         let path_log = ".test02.minikv.log";
         let _ = fs::remove_file(".minikv.log");
 
-        append_linea_log("set \"clave\" \"valor\"\n",path_log).unwrap();
+        append_linea_log("set \"clave\" \"valor\"\n", path_log).unwrap();
 
         let contenido = fs::read_to_string(path_log).expect("no se pudo leer el archivo");
 
@@ -329,8 +345,8 @@ mod tests {
         let path_log = ".test03.minikv.log";
         let _ = fs::remove_file(".minikv.log");
 
-        append_linea_log("set \"clave1\" \"valor1\"\n",path_log).unwrap();
-        append_linea_log("set \"clave2\" \"valor2\"\n",path_log).unwrap();
+        append_linea_log("set \"clave1\" \"valor1\"\n", path_log).unwrap();
+        append_linea_log("set \"clave2\" \"valor2\"\n", path_log).unwrap();
 
         let contenido = fs::read_to_string(path_log).expect("no se pudo leer el archivo");
 
@@ -483,7 +499,6 @@ mod tests {
         let _ = fs::remove_file(path_data);
         let _ = fs::remove_file(path_log);
 
-
         fs::write(path_log, "set clave1 valor1\nset clave2 valor2\n").unwrap();
 
         let dic = reconstruir_estado(path_data, path_log).unwrap();
@@ -507,7 +522,6 @@ mod tests {
         assert_eq!(dic.len(), 0);
         let _ = fs::remove_file(path_data);
         let _ = fs::remove_file(path_log);
-
     }
     #[test]
     fn test_14_reconstruir_estado_linea_invalida() {

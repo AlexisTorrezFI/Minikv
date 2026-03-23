@@ -5,7 +5,7 @@ use crate::storage::reconstruir_estado;
 use crate::storage::sobrescribir_data;
 use crate::storage::vaciar_log;
 
-/// Ejecuta el comando `set`, registrando una clave y su valor en el archivo `.minikv.log`.
+/// Ejecuta el comando `set`, registrando una clave y su valor en el archivo con ruta `path_log`.
 ///
 /// La clave y el valor se serializan antes de ser escritos, para asegurar
 /// que el formato sea consistente y permita su posterior reconstrucción.
@@ -17,6 +17,7 @@ use crate::storage::vaciar_log;
 ///
 /// - `clave`: clave a almacenar.
 /// - `valor`: valor asociado a la clave.
+/// - `path_log`: ruta al archivo de log.
 ///
 /// # Retorna
 ///
@@ -28,7 +29,7 @@ use crate::storage::vaciar_log;
 /// - Si la clave ya existe, su valor será sobrescrito en futuras reconstrucciones
 ///   del estado.
 /// - Esta función no modifica el estado en memoria, solo registra la operación.
-pub fn comando_set(clave: String, valor: String,path_log: &str) -> Result<(), ErrorMiniKv> {
+pub fn comando_set(clave: String, valor: String, path_log: &str) -> Result<(), ErrorMiniKv> {
     let clave_log = serializar(&clave);
     let valor_log = serializar(&valor);
     let mut linea_log: String = String::new();
@@ -37,14 +38,14 @@ pub fn comando_set(clave: String, valor: String,path_log: &str) -> Result<(), Er
     linea_log.push(' ');
     linea_log.push_str(&valor_log);
     linea_log.push('\n');
-    let resultado = append_linea_log(&linea_log,path_log);
+    let resultado = append_linea_log(&linea_log, path_log);
     match resultado {
         Ok(()) => Ok(()),
         Err(e) => Err(e),
     }
 }
 
-/// Ejecuta el comando `unset`, registrando la eliminación de una clave en el archivo `.minikv.log`.
+/// Ejecuta el comando `unset`, registrando la eliminación de una clave en el archivo con ruta `path_log`.
 ///
 /// La operación se registra en el log utilizando el formato:
 /// `set clave`
@@ -55,6 +56,7 @@ pub fn comando_set(clave: String, valor: String,path_log: &str) -> Result<(), Er
 /// # Parámetros
 ///
 /// - `clave`: clave a eliminar.
+/// - `path_log`: ruta al archivo de log.
 ///
 /// # Retorna
 ///
@@ -66,13 +68,13 @@ pub fn comando_set(clave: String, valor: String,path_log: &str) -> Result<(), Er
 /// - Si la clave existe, será eliminada en la reconstrucción del estado.
 /// - Si la clave no existe, la operación no produce errores.
 /// - Esta función solo registra la operación.
-pub fn comando_unset(clave: String,path_log: &str) -> Result<(), ErrorMiniKv> {
+pub fn comando_unset(clave: String, path_log: &str) -> Result<(), ErrorMiniKv> {
     let clave_log = serializar(&clave);
     let mut linea_log: String = String::new();
     linea_log.push_str("set ");
     linea_log.push_str(&clave_log);
     linea_log.push('\n');
-    let resultado = append_linea_log(&linea_log,path_log);
+    let resultado = append_linea_log(&linea_log, path_log);
     match resultado {
         Ok(()) => Ok(()),
         Err(e) => Err(e),
@@ -82,37 +84,41 @@ pub fn comando_unset(clave: String,path_log: &str) -> Result<(), ErrorMiniKv> {
 /// Ejecuta el comando `get`, obteniendo el valor asociado a una clave.
 ///
 /// La función reconstruye el estado actual del MiniKV a partir de los archivos
-/// `.minikv.data` y `.minikv.log`, y luego busca la clave en el diccionario resultante.
+/// con rutas `<path_data>` y `<path_log>`, y luego busca la clave en el diccionario resultante.
 ///
 /// # Parámetros
 ///
 /// - `clave`: clave cuyo valor se desea obtener.
+/// - `path_data`: ruta al archivo de datos.
+/// - `path_log`: ruta al archivo de log.
 ///
 /// # Retorna
 ///
-/// - `Ok(Some(valor))` si la clave existe.
-/// - `Ok(None)` si la clave no se encuentra.
+/// - `Ok(valor)` si la clave existe.
 /// - `Err(ErrorMiniKv)` si ocurre un error al reconstruir el estado
-///   (por ejemplo, error de lectura o línea inválida).
+///   (por ejemplo, error de lectura o línea inválida) o si no encuentra la clave.
 ///
 /// # Comportamiento
 ///
 /// - La búsqueda se realiza sobre el estado reconstruido en memoria.
-/// - Se utiliza `remove`, por lo que la clave es eliminada del diccionario temporal.
-///   Esto no afecta al almacenamiento persistente.
-/// - No modifica los archivos `.data` ni `.log`.
-pub fn comando_get(clave: String, path_log: &str,path_data: &str) -> Result<Option<String>, ErrorMiniKv> {
-    let respuesta = reconstruir_estado(path_data, path_log);
-    match respuesta {
-        Ok(mut diccionario) => Ok(diccionario.remove(&clave)),
-        Err(e) => Err(e),
+/// - No modifica los archivos con rutas `<path_data>` ni `<path_log>`.
+pub fn comando_get(clave: String, path_data: &str, path_log: &str) -> Result<String, ErrorMiniKv> {
+    let mut diccionario = reconstruir_estado(path_data, path_log)?;
+
+    match diccionario.remove(&clave) {
+        Some(valor) => Ok(valor.clone()),
+        None => Err(ErrorMiniKv::NotFound),
     }
 }
 
 /// Ejecuta el comando `length`, devolviendo la cantidad de claves almacenadas.
 ///
 /// La función reconstruye el estado actual del MiniKV a partir de los archivos
-/// `.minikv.data` y `.minikv.log`, y luego calcula el tamaño del diccionario resultante.
+/// con rutas `<path_data>` y `<path_log>`, y luego calcula el tamaño del diccionario resultante.
+///
+/// # Parámetros
+/// - `path_data`: ruta al archivo de datos.
+/// - `path_log`: ruta al archivo de log.
 ///
 /// # Retorna
 ///
@@ -134,33 +140,37 @@ pub fn comando_length(path_data: &str, path_log: &str) -> Result<usize, ErrorMin
 
 /// Ejecuta el comando `snapshot`, consolidando el estado actual del MiniKV.
 ///
-/// La función reconstruye el estado completo a partir de los archivos
-/// `.minikv.data` y `.minikv.log`, y luego:
+/// La función reconstruye el estado completo a partir de los archivos cuyas rutas son
+/// `<path_data>` y `<path_log>`, y luego:
 ///
 /// 1. Genera un nuevo contenido con los pares clave-valor finales.
-/// 2. Sobrescribe el archivo `.minikv.data` con ese contenido.
-/// 3. Vacía el archivo `.minikv.log`.
+/// 2. Sobrescribe el archivo con path `<path_data>` con ese contenido.
+/// 3. Vacía el archivo con path `<path_log>`.
 ///
 /// De esta forma, se elimina el historial de operaciones y se conserva
 /// únicamente el estado final del sistema.
+///
+/// # Parámetros
+/// - `path_data`: ruta al archivo de datos.
+/// - `path_log`: ruta al archivo de log.
 ///
 /// # Retorna
 ///
 /// - `Ok(())` si el snapshot se realiza correctamente.
 /// - `Err(ErrorMiniKv)` si ocurre algún error al:
 ///   - reconstruir el estado,
-///   - escribir el archivo `.minikv.data`,
-///   - o vaciar el archivo `.minikv.log`.
+///   - escribir el archivo con path `<path_data>`,
+///   - o vaciar el archivo con path `<path_log>`.
 ///
 /// # Comportamiento
 ///
-/// - El archivo `.minikv.data` queda con el estado final actualizado.
-/// - El archivo `.minikv.log` queda vacío.
+/// - El archivo `<path_data>` queda con el estado final actualizado.
+/// - El archivo `<path_log>` queda vacío.
 /// - No se pierde información si ocurre un error antes de vaciar el log.
 ///
 /// # Notas
 ///
-/// - Las claves y valores se serializan antes de ser escritos en `.data`.
+/// - Las claves y valores se serializan antes de ser escritos en `<path_data>`.
 pub fn comando_snapshot(path_data: &str, path_log: &str) -> Result<(), ErrorMiniKv> {
     let respuesta = reconstruir_estado(path_data, path_log);
     match respuesta {
@@ -176,7 +186,7 @@ pub fn comando_snapshot(path_data: &str, path_log: &str) -> Result<(), ErrorMini
                 linea.push('\n');
                 contenido.push_str(&linea);
             }
-            sobrescribir_data(&contenido,path_data)?;
+            sobrescribir_data(&contenido, path_data)?;
             vaciar_log(path_log)?;
             Ok(())
         }
@@ -198,9 +208,9 @@ mod tests {
 
         comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
 
-        let resultado = comando_get("clave1".to_string(), path_log, path_data).unwrap();
+        let resultado = comando_get("clave1".to_string(), path_data, path_log).unwrap();
 
-        assert_eq!(resultado, Some("valor1".to_string()));
+        assert_eq!(resultado, "valor1".to_string());
 
         let _ = fs::remove_file(path_data);
         let _ = fs::remove_file(path_log);
@@ -218,9 +228,9 @@ mod tests {
         comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
         comando_set("clave1".to_string(), "valor2".to_string(), path_log).unwrap();
 
-        let resultado = comando_get("clave1".to_string(), path_log, path_data).unwrap();
+        let resultado = comando_get("clave1".to_string(), path_data, path_log).unwrap();
 
-        assert_eq!(resultado, Some("valor2".to_string()));
+        assert_eq!(resultado, "valor2".to_string());
 
         let _ = fs::remove_file(path_data);
         let _ = fs::remove_file(path_log);
@@ -230,7 +240,6 @@ mod tests {
     fn test_03_integracion_unset() {
         use std::fs;
 
-
         let path_log = ".test.integracion03.minikv.log";
         let path_data = ".test.integracion03.minikv.data";
         let _ = fs::remove_file(path_data);
@@ -239,9 +248,9 @@ mod tests {
         comando_set("clave1".to_string(), "valor1".to_string(), path_log).unwrap();
         comando_unset("clave1".to_string(), path_log).unwrap();
 
-        let resultado = comando_get("clave1".to_string(), path_log, path_data).unwrap();
-
-        assert_eq!(resultado, None);
+        let resultado: Result<String, ErrorMiniKv> =
+            comando_get("clave1".to_string(), path_data, path_log);
+        assert_eq!(resultado, Err(ErrorMiniKv::NotFound));
 
         let _ = fs::remove_file(path_data);
         let _ = fs::remove_file(path_log);

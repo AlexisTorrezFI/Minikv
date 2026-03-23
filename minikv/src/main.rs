@@ -37,42 +37,61 @@ fn main() {
     let comando_option: Option<String> = args.next();
     let clave_option: Option<String> = args.next();
     let valor_option: Option<String> = args.next();
+    let extra_argument_option: Option<String> = args.next();
 
-    match (comando_option, clave_option, valor_option) {
-        (Some(comando), Some(clave), Some(valor)) if comando == "set" => {
+    match (
+        comando_option,
+        clave_option,
+        valor_option,
+        extra_argument_option,
+    ) {
+        (Some(comando), Some(clave), Some(valor), None) if comando == "set" => {
             if let Err(e) = comando_set(clave, valor, path_log) {
                 errores::imprimir_error(e);
             } else {
                 println!("OK");
             }
         }
-        (Some(comando), Some(clave), None) if comando == "set" => {
+        (Some(comando), Some(clave), None, None) if comando == "set" => {
             if let Err(e) = comando_unset(clave, path_log) {
                 errores::imprimir_error(e);
             } else {
                 println!("OK");
             }
         }
-        (Some(comando), Some(clave), None) if comando == "get" => {
-            match comandos::comando_get(clave, path_log, path_data) {
-                Ok(Some(valor)) => println!("{}", valor),
-                Ok(None) => println!("NOT FOUND"),
+        (Some(comando), Some(clave), None, None) if comando == "get" => {
+            match comandos::comando_get(clave, path_data, path_log) {
+                Ok(valor) => println!("{}", valor),
                 Err(e) => errores::imprimir_error(e),
             }
         }
-        (Some(comando), None, None) if comando == "length" => match comandos::comando_length(path_log, path_data) {
-            Ok(cantidad) => println!("{}", cantidad),
-            Err(e) => errores::imprimir_error(e),
-        },
-        (Some(comando), None, None) if comando == "snapshot" => {
+        (Some(comando), None, None, None) if comando == "length" => {
+            match comandos::comando_length(path_data, path_log) {
+                Ok(cantidad) => println!("{}", cantidad),
+                Err(e) => errores::imprimir_error(e),
+            }
+        }
+        (Some(comando), None, None, None) if comando == "snapshot" => {
             if let Err(e) = comandos::comando_snapshot(path_data, path_log) {
                 errores::imprimir_error(e);
             } else {
                 println!("OK");
             }
         }
+        (Some(comando), _, _, Some(_)) if comando == "set" => {
+            errores::imprimir_error(errores::ErrorMiniKv::ExtraArgument);
+        }
+        (Some(comando), _, Some(_), _) if comando == "get" => {
+            errores::imprimir_error(errores::ErrorMiniKv::ExtraArgument);
+        }
+        (Some(comando), Some(_), _, _) if comando == "length" || comando == "snapshot" => {
+            errores::imprimir_error(errores::ErrorMiniKv::ExtraArgument);
+        }
+        (Some(comando), None, _, _) if comando == "set" || comando == "get" => {
+            errores::imprimir_error(errores::ErrorMiniKv::MissingArgument);
+        }
         _ => {
-            println!("Comando no reconocido o argumentos incorrectos!");
+            errores::imprimir_error(errores::ErrorMiniKv::UnknownCommand);
         }
     }
 }
