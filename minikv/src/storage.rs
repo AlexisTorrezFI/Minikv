@@ -1,10 +1,14 @@
+use crate::comandos::TipoComando;
 use crate::errores::ErrorMiniKv;
 use crate::parser::separar_argumentos;
 use std::collections::HashMap;
-use std::fs;
+use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::ErrorKind;
 use std::io::Write;
+use std::str::FromStr;
 
 /// Agrega una línea al archivo de la ruta pasada por parámetro.
 ///
@@ -101,6 +105,18 @@ pub fn reconstruir_estado(
     Ok(diccionario)
 }
 
+fn abrir_archivo(path: &str) -> Result<Option<File>, ErrorMiniKv> {
+    match File::open(path) {
+        Ok(file) => Ok(Some(file)),
+        Err(e) => {
+            if e.kind() == ErrorKind::NotFound {
+                Ok(None)
+            } else {
+                Err(ErrorMiniKv::InvalidDataFile)
+            }
+        }
+    }
+}
 /// Carga en memoria el contenido del archivo con el path proporcionado.
 ///
 /// Esta función intenta leer el archivo y, por cada línea,
@@ -140,27 +156,26 @@ fn cargar_data_en_memoria(
     diccionario: &mut HashMap<String, String>,
     path_data: &str,
 ) -> Result<(), ErrorMiniKv> {
-    let contenido = match fs::read_to_string(path_data) {
-        Ok(contenido) => contenido,
-        Err(e) => {
-            if e.kind() == ErrorKind::NotFound {
-                return Ok(());
-            } else {
-                return Err(ErrorMiniKv::InvalidDataFile);
-            }
-        }
+    let file = match abrir_archivo(path_data) {
+        Ok(Some(f)) => f,
+        Ok(None) => return Ok(()),
+        Err(e) => return Err(e),
     };
-    for linea in contenido.lines() {
-        if let Err(_e) = validar_linea_data(linea) {
+    let reader = BufReader::new(file);
+    for linea_resultado in reader.lines() {
+        let Ok(linea) = linea_resultado else {
+            return Err(ErrorMiniKv::InvalidDataFile);
+        };
+        if let Err(_e) = validar_linea_data(&linea) {
             return Err(ErrorMiniKv::InvalidDataFile);
         }
-        let partes = separar_argumentos(linea);
+        let partes = separar_argumentos(&linea);
 
-        if partes.len() == 2 {
-            let clave = &partes[0];
-            let valor = &partes[1];
-
-            diccionario.insert(clave.to_string(), valor.to_string());
+        match partes.as_slice() {
+            [clave, valor] => {
+                diccionario.insert(clave.to_string(), valor.to_string());
+            }
+            _ => return Err(ErrorMiniKv::InvalidDataFile),
         }
     }
     Ok(())
@@ -216,29 +231,26 @@ fn cargar_log_en_memoria(
     diccionario: &mut HashMap<String, String>,
     path_log: &str,
 ) -> Result<(), ErrorMiniKv> {
-    let contenido = match fs::read_to_string(path_log) {
-        Ok(contenido) => contenido,
-        Err(e) => {
-            if e.kind() == ErrorKind::NotFound {
-                return Ok(());
-            } else {
-                return Err(ErrorMiniKv::InvalidLogFile);
-            }
-        }
+    let file = match abrir_archivo(path_log) {
+        Ok(Some(f)) => f,
+        Ok(None) => return Ok(()),
+        Err(e) => return Err(e),
     };
-    for linea in contenido.lines() {
-        if let Err(_e) = validar_linea_log(linea) {
+    let reader = BufReader::new(file);
+
+    for linea_resultado in reader.lines() {
+        let Ok(linea) = linea_resultado else {
+            return Err(ErrorMiniKv::InvalidLogFile);
+        };
+        if let Err(_e) = validar_linea_log(&linea) {
             return Err(ErrorMiniKv::InvalidLogFile);
         }
-        let partes = separar_argumentos(linea);
-        match partes.len() {
-            3 => {
-                let clave = &partes[1];
-                let valor = &partes[2];
+        let partes = separar_argumentos(&linea);
+        match partes.as_slice() {
+            [_, clave, valor] => {
                 diccionario.insert(clave.to_string(), valor.to_string());
             }
-            2 => {
-                let clave = &partes[1];
+            [_, clave] => {
                 diccionario.remove(clave);
             }
             _ => {
@@ -267,22 +279,14 @@ fn cargar_log_en_memoria(
 /// - `Err(ErrorMiniKv::InvalidLogFile)` si la línea no cumple con el formato esperado.
 fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
     let partes = separar_argumentos(linea);
-    match partes.len() {
-        3 => {
-            if partes[0] != "set" {
-                return Err(ErrorMiniKv::InvalidLogFile);
-            }
-        }
-        2 => {
-            if partes[0] != "set" {
-                return Err(ErrorMiniKv::InvalidLogFile);
-            }
-        }
-        _ => {
-            return Err(ErrorMiniKv::InvalidLogFile);
-        }
+
+    match partes.as_slice() {
+        [comando, _] | [comando, _, _] => match TipoComando::from_str(comando) {
+            Ok(TipoComando::Set) => Ok(()),
+            _ => Err(ErrorMiniKv::InvalidLogFile),
+        },
+        _ => Err(ErrorMiniKv::InvalidLogFile),
     }
-    Ok(())
 }
 
 /// Valida el formato de una línea del archivo de tipo data.
@@ -310,128 +314,163 @@ fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
 mod tests {
 
     use super::*;
+    use std::fs;
+    pub fn borrar_archivos(paths: &[&str]) {
+        for path in paths {
+            let _ = fs::remove_file(path);
+        }
+    }
 
     #[test]
     fn test_01_append_linea_log_crea_archivo() {
         use std::fs;
 
         let path_log = ".test01.minikv.log";
-        let _ = fs::remove_file(path_log);
+        borrar_archivos(&[path_log]);
 
         append_linea_log("set clave valor\n", path_log).unwrap();
 
         assert!(fs::metadata(path_log).is_ok());
 
-        let _ = fs::remove_file(".test01.minikv.log");
+        borrar_archivos(&[path_log]);
     }
     #[test]
     fn test_02_append_linea_log_escribe_linea() {
-        use std::fs;
-
         let path_log = ".test02.minikv.log";
-        let _ = fs::remove_file(".minikv.log");
+        borrar_archivos(&[path_log]);
 
         append_linea_log("set \"clave\" \"valor\"\n", path_log).unwrap();
 
-        let contenido = fs::read_to_string(path_log).expect("no se pudo leer el archivo");
+        let file = File::open(path_log).unwrap();
+        let mut reader = BufReader::new(file);
 
-        assert_eq!(contenido, "set \"clave\" \"valor\"\n");
+        let mut linea = String::new();
+        reader.read_line(&mut linea).unwrap();
 
-        let _ = fs::remove_file(path_log);
+        assert_eq!(linea, "set \"clave\" \"valor\"\n");
+
+        borrar_archivos(&[path_log]);
     }
     #[test]
     fn test_03_append_linea_log_agrega_lineas() {
-        use std::fs;
         let path_log = ".test03.minikv.log";
-        let _ = fs::remove_file(".minikv.log");
+        borrar_archivos(&[path_log]);
 
         append_linea_log("set \"clave1\" \"valor1\"\n", path_log).unwrap();
         append_linea_log("set \"clave2\" \"valor2\"\n", path_log).unwrap();
 
-        let contenido = fs::read_to_string(path_log).expect("no se pudo leer el archivo");
+        let file = File::open(path_log).unwrap();
+        let mut reader = BufReader::new(file);
 
-        assert_eq!(
-            contenido,
-            "set \"clave1\" \"valor1\"\nset \"clave2\" \"valor2\"\n"
-        );
-        let _ = fs::remove_file(path_log);
+        let mut l1 = String::new();
+        let mut l2 = String::new();
+
+        reader.read_line(&mut l1).unwrap();
+        reader.read_line(&mut l2).unwrap();
+
+        assert_eq!(l1, "set \"clave1\" \"valor1\"\n");
+        assert_eq!(l2, "set \"clave2\" \"valor2\"\n");
+        borrar_archivos(&[path_log]);
     }
     #[test]
     fn test_04_append_linea_log_multiple_llamadas() {
-        use std::fs;
-
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
         let path_log = ".test04.minikv.log";
-        let _ = fs::remove_file(".minikv.log");
+        borrar_archivos(&[path_log]);
 
         for i in 0..5 {
             append_linea_log(&format!("set clave{} valor{}\n", i, i), path_log).unwrap();
         }
+        let file = File::open(path_log).unwrap();
+        let reader = BufReader::new(file);
+        let mut encontro_clave0 = false;
+        let mut encontro_clave4 = false;
+        for linea_resultado in reader.lines() {
+            let linea = linea_resultado.unwrap();
 
-        let contenido = fs::read_to_string(path_log).unwrap();
+            if linea.contains("clave0") {
+                encontro_clave0 = true;
+            }
+            if linea.contains("clave4") {
+                encontro_clave4 = true;
+            }
+        }
+        assert!(encontro_clave0);
+        assert!(encontro_clave4);
 
-        assert!(contenido.contains("clave0"));
-        assert!(contenido.contains("clave4"));
-        let _ = fs::remove_file(path_log);
+        borrar_archivos(&[path_log]);
     }
     #[test]
     fn test_05_sobrescribir_data_crea_y_escribe() {
-        use std::fs;
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
         let path_data = ".test05.minikv.data";
-        let _ = fs::remove_file(path_data);
+        borrar_archivos(&[path_data]);
 
         sobrescribir_data("clave valor\n", path_data).unwrap();
 
-        let contenido = fs::read_to_string(path_data).expect("no se pudo leer el archivo");
+        let file = File::open(path_data).unwrap();
+        let mut reader = BufReader::new(file);
 
-        assert_eq!(contenido, "clave valor\n");
+        let mut linea = String::new();
+        reader.read_line(&mut linea).unwrap();
 
-        let _ = fs::remove_file(path_data);
+        assert_eq!(linea, "clave valor\n");
+
+        borrar_archivos(&[path_data]);
     }
     #[test]
     fn test_06_sobrescribir_data_reemplaza_contenido() {
-        use std::fs;
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
         let path_data = ".test06.minikv.data";
-        let _ = fs::remove_file(path_data);
+        borrar_archivos(&[path_data]);
 
         sobrescribir_data("clave1 valor1\n", path_data).unwrap();
         sobrescribir_data("clave2 valor2\n", path_data).unwrap();
 
-        let contenido = fs::read_to_string(path_data).expect("no se pudo leer el archivo");
+        let file = File::open(path_data).unwrap();
+        let mut reader = BufReader::new(file);
 
-        assert_eq!(contenido, "clave2 valor2\n");
+        let mut linea = String::new();
+        reader.read_line(&mut linea).unwrap();
 
-        let _ = fs::remove_file(path_data);
+        assert_eq!(linea, "clave2 valor2\n");
+
+        borrar_archivos(&[path_data]);
     }
     #[test]
     fn test_07_sobrescribir_data_sobrescribe_contenido_vacio() {
         use std::fs;
+
         let path_data = ".test07.minikv.data";
-        let _ = fs::remove_file(path_data);
+        borrar_archivos(&[path_data]);
 
         sobrescribir_data("", path_data).unwrap();
 
-        let contenido = fs::read_to_string(path_data).unwrap();
+        let metadata = fs::metadata(path_data).unwrap();
+        assert_eq!(metadata.len(), 0);
 
-        assert_eq!(contenido, "");
-
-        let _ = fs::remove_file(path_data);
+        borrar_archivos(&[path_data]);
     }
     #[test]
     fn test_08_vaciar_log_elimina_contenido() {
         use std::fs;
 
         let path_log = ".test08.minikv.log";
-        let _ = fs::remove_file(path_log);
+        borrar_archivos(&[path_log]);
 
         fs::write(path_log, "set clave valor\n").unwrap();
 
         vaciar_log(path_log).unwrap();
 
-        let contenido = fs::read_to_string(path_log).unwrap();
+        let metadata = fs::metadata(path_log).unwrap();
+        assert_eq!(metadata.len(), 0);
 
-        assert_eq!(contenido, "");
-
-        let _ = fs::remove_file(path_log);
+        borrar_archivos(&[path_log]);
     }
     #[test]
     fn test_09_reconstruir_estado_solo_data() {

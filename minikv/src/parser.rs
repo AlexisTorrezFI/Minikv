@@ -23,36 +23,33 @@
 ///
 /// - Un `Vec<String>` con los argumentos separados.
 pub fn separar_argumentos(texto: &str) -> Vec<String> {
-    let mut args: Vec<String> = Vec::new();
-    let mut actual: String = String::new();
-    let mut en_comillas: bool = false;
-    let mut escape: bool = false;
+    let mut args = Vec::new();
+    let mut actual = String::new();
+    let mut en_comillas = false;
+    let mut escape = false;
+
     for c in texto.chars() {
-        if escape {
-            actual.push(c);
-            escape = false;
-            continue;
-        }
-        if c == '\\' {
-            escape = true;
-            continue;
-        }
-        if c == '"' {
-            en_comillas = !en_comillas;
-            continue;
-        }
-        if c == ' ' && !en_comillas {
-            if !actual.is_empty() {
-                args.push(actual);
-                actual = String::new();
+        match (escape, c) {
+            (true, _) => {
+                actual.push(c);
+                escape = false;
             }
-            continue;
+            (false, '\\') => escape = true,
+            (false, '"') => en_comillas = !en_comillas,
+            (false, ' ') if !en_comillas => {
+                if !actual.is_empty() {
+                    args.push(actual);
+                    actual = String::new();
+                }
+            }
+            _ => actual.push(c),
         }
-        actual.push(c);
     }
+
     if !actual.is_empty() {
         args.push(actual);
     }
+
     args
 }
 

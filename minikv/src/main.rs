@@ -2,9 +2,11 @@ mod comandos;
 mod errores;
 mod parser;
 mod storage;
-use crate::comandos::comando_set;
-use crate::comandos::comando_unset;
-use std::env;
+use crate::comandos::{Comando, TipoComando, crear_comando};
+use std::{
+    env::{self},
+    str::FromStr,
+};
 
 /// Punto de entrada del programa MiniKV.
 ///
@@ -34,64 +36,61 @@ fn main() {
     let path_data = ".minikv.data";
     let mut args = env::args();
     args.next();
-    let comando_option: Option<String> = args.next();
-    let clave_option: Option<String> = args.next();
-    let valor_option: Option<String> = args.next();
-    let extra_argument_option: Option<String> = args.next();
 
-    match (
-        comando_option,
-        clave_option,
-        valor_option,
-        extra_argument_option,
-    ) {
-        (Some(comando), Some(clave), Some(valor), None) if comando == "set" => {
-            if let Err(e) = comando_set(clave, valor, path_log) {
-                errores::imprimir_error(e);
-            } else {
-                println!("OK");
-            }
+    let Some(comando) = args.next() else {
+        errores::imprimir_error(errores::ErrorMiniKv::UnknownCommand);
+        return;
+    };
+    let tipo_comando = match TipoComando::from_str(&comando) {
+        Ok(tipo) => tipo,
+        Err(e) => {
+            errores::imprimir_error(e);
+            return;
         }
-        (Some(comando), Some(clave), None, None) if comando == "set" => {
-            if let Err(e) = comando_unset(clave, path_log) {
-                errores::imprimir_error(e);
-            } else {
-                println!("OK");
-            }
+    };
+    match crear_comando(tipo_comando, args.next(), args.next(), args.next()) {
+        Ok(comando) => ejecutar_comando(comando, path_data, path_log),
+        Err(e) => errores::imprimir_error(e),
+    }
+}
+
+fn ejecutar_comando(comando: Comando, path_data: &str, path_log: &str) {
+    match comando {
+        Comando::Set(clave, valor) => {
+            imprimir_resultado_simple(comandos::comando_set(clave, valor, path_log));
         }
-        (Some(comando), Some(clave), None, None) if comando == "get" => {
-            match comandos::comando_get(clave, path_data, path_log) {
-                Ok(valor) => println!("{}", valor),
-                Err(e) => errores::imprimir_error(e),
-            }
+        Comando::Unset(clave) => {
+            imprimir_resultado_simple(comandos::comando_unset(clave, path_log));
         }
-        (Some(comando), None, None, None) if comando == "length" => {
-            match comandos::comando_length(path_data, path_log) {
-                Ok(cantidad) => println!("{}", cantidad),
-                Err(e) => errores::imprimir_error(e),
-            }
+        Comando::Get(clave) => {
+            imprimir_resultado_valor(comandos::comando_get(clave, path_data, path_log));
         }
-        (Some(comando), None, None, None) if comando == "snapshot" => {
-            if let Err(e) = comandos::comando_snapshot(path_data, path_log) {
-                errores::imprimir_error(e);
-            } else {
-                println!("OK");
-            }
+        Comando::Length => {
+            imprimir_resultado_numero(comandos::comando_length(path_data, path_log));
         }
-        (Some(comando), _, _, Some(_)) if comando == "set" => {
-            errores::imprimir_error(errores::ErrorMiniKv::ExtraArgument);
+        Comando::Snapshot => {
+            imprimir_resultado_simple(comandos::comando_snapshot(path_data, path_log));
         }
-        (Some(comando), _, Some(_), _) if comando == "get" => {
-            errores::imprimir_error(errores::ErrorMiniKv::ExtraArgument);
-        }
-        (Some(comando), Some(_), _, _) if comando == "length" || comando == "snapshot" => {
-            errores::imprimir_error(errores::ErrorMiniKv::ExtraArgument);
-        }
-        (Some(comando), None, _, _) if comando == "set" || comando == "get" => {
-            errores::imprimir_error(errores::ErrorMiniKv::MissingArgument);
-        }
-        _ => {
-            errores::imprimir_error(errores::ErrorMiniKv::UnknownCommand);
-        }
+    }
+}
+
+fn imprimir_resultado_simple(resultado: Result<(), errores::ErrorMiniKv>) {
+    match resultado {
+        Ok(()) => println!("OK"),
+        Err(e) => errores::imprimir_error(e),
+    }
+}
+
+fn imprimir_resultado_valor(resultado: Result<String, errores::ErrorMiniKv>) {
+    match resultado {
+        Ok(valor) => println!("{}", valor),
+        Err(e) => errores::imprimir_error(e),
+    }
+}
+
+fn imprimir_resultado_numero(resultado: Result<usize, errores::ErrorMiniKv>) {
+    match resultado {
+        Ok(cantidad) => println!("{}", cantidad),
+        Err(e) => errores::imprimir_error(e),
     }
 }
