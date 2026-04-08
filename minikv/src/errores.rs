@@ -24,26 +24,26 @@ pub enum ErrorMiniKv {
     UnknownCommand,
 }
 
-/// Imprime un mensaje de error en el formato requerido por el TP.
+/// Devuelve un string con el mensaje de error en el formato requerido por el TP.
 ///
 /// Traduce cada variante de `ErrorMiniKv` al formato:
 /// `ERROR: [TIPO]`
 ///
 /// # Parámetros
 ///
-/// - `e`: error a imprimir.
+/// - `e`: error a obtener el mensaje.
 ///
 /// # Comportamiento
 ///
-/// - Imprime el código de error correspondiente por consola.
-/// - No devuelve ningún valor.
-pub fn imprimir_error(e: ErrorMiniKv) {
+/// - Devuelve el mensaje de error correspondiente.
+/// - No imprime nada por consola.
+pub fn obtener_mensaje(e: ErrorMiniKv) -> &'static str {
     match e {
-        ErrorMiniKv::NotFound => println!("ERROR: NOT FOUND"),
-        ErrorMiniKv::ExtraArgument => println!("ERROR: EXTRA ARGUMENT"),
-        ErrorMiniKv::InvalidDataFile => println!("ERROR: INVALID DATA FILE"),
-        ErrorMiniKv::InvalidLogFile => println!("ERROR: INVALID LOG FILE"),
-        ErrorMiniKv::MissingArgument => println!("ERROR: MISSING ARGUMENT"),
-        ErrorMiniKv::UnknownCommand => println!("ERROR: UNKNOWN COMMAND"),
+        ErrorMiniKv::NotFound => "ERROR: NOT FOUND",
+        ErrorMiniKv::ExtraArgument => "ERROR: EXTRA ARGUMENT",
+        ErrorMiniKv::InvalidDataFile => "ERROR: INVALID DATA FILE",
+        ErrorMiniKv::InvalidLogFile => "ERROR: INVALID LOG FILE",
+        ErrorMiniKv::MissingArgument => "ERROR: MISSING ARGUMENT",
+        ErrorMiniKv::UnknownCommand => "ERROR: UNKNOWN COMMAND",
     }
 }

@@ -38,19 +38,22 @@ fn main() {
     args.next();
 
     let Some(comando) = args.next() else {
-        errores::imprimir_error(errores::ErrorMiniKv::UnknownCommand);
+        println!(
+            "{}",
+            errores::obtener_mensaje(errores::ErrorMiniKv::UnknownCommand)
+        );
         return;
     };
     let tipo_comando = match TipoComando::from_str(&comando) {
         Ok(tipo) => tipo,
         Err(e) => {
-            errores::imprimir_error(e);
+            println!("{}", errores::obtener_mensaje(e));
             return;
         }
     };
     match crear_comando(tipo_comando, args.next(), args.next(), args.next()) {
         Ok(comando) => ejecutar_comando(comando, path_data, path_log),
-        Err(e) => errores::imprimir_error(e),
+        Err(e) => println!("{}", errores::obtener_mensaje(e)),
     }
 }
 
@@ -77,20 +80,20 @@ fn ejecutar_comando(comando: Comando, path_data: &str, path_log: &str) {
 fn imprimir_resultado_simple(resultado: Result<(), errores::ErrorMiniKv>) {
     match resultado {
         Ok(()) => println!("OK"),
-        Err(e) => errores::imprimir_error(e),
+        Err(e) => println!("{}", errores::obtener_mensaje(e)),
     }
 }
 
 fn imprimir_resultado_valor(resultado: Result<String, errores::ErrorMiniKv>) {
     match resultado {
         Ok(valor) => println!("{}", valor),
-        Err(e) => errores::imprimir_error(e),
+        Err(e) => println!("{}", errores::obtener_mensaje(e)),
     }
 }
 
 fn imprimir_resultado_numero(resultado: Result<usize, errores::ErrorMiniKv>) {
     match resultado {
         Ok(cantidad) => println!("{}", cantidad),
-        Err(e) => errores::imprimir_error(e),
+        Err(e) => println!("{}", errores::obtener_mensaje(e)),
     }
 }
