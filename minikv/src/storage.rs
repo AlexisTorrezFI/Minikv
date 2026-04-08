@@ -1,4 +1,5 @@
 use crate::comandos::TipoComando;
+use crate::errores::ErrorArchivo;
 use crate::errores::ErrorMiniKv;
 use crate::parser::separar_argumentos;
 use std::collections::HashMap;
@@ -24,9 +25,9 @@ pub fn append_linea_log(linea: &str, path_log: &str) -> Result<(), ErrorMiniKv> 
         .create(true)
         .append(true)
         .open(path_log)
-        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
+        .map_err(|_| ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile))?;
     file.write_all(linea.as_bytes())
-        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
+        .map_err(|_| ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile))?;
     Ok(())
 }
 
@@ -51,10 +52,10 @@ pub fn sobrescribir_data(contenido: &str, path_data: &str) -> Result<(), ErrorMi
         .write(true)
         .truncate(true)
         .open(path_data)
-        .map_err(|_| ErrorMiniKv::InvalidDataFile)?;
+        .map_err(|_| ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile))?;
     archivo
         .write_all(contenido.as_bytes())
-        .map_err(|_| ErrorMiniKv::InvalidDataFile)?;
+        .map_err(|_| ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile))?;
     Ok(())
 }
 
@@ -78,7 +79,7 @@ pub fn vaciar_log(path_log: &str) -> Result<(), ErrorMiniKv> {
         .write(true)
         .truncate(true)
         .open(path_log)
-        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
+        .map_err(|_| ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile))?;
     Ok(())
 }
 
@@ -112,7 +113,7 @@ fn abrir_archivo(path: &str) -> Result<Option<File>, ErrorMiniKv> {
             if e.kind() == ErrorKind::NotFound {
                 Ok(None)
             } else {
-                Err(ErrorMiniKv::InvalidDataFile)
+                Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile))
             }
         }
     }
@@ -164,10 +165,10 @@ fn cargar_data_en_memoria(
     let reader = BufReader::new(file);
     for linea_resultado in reader.lines() {
         let Ok(linea) = linea_resultado else {
-            return Err(ErrorMiniKv::InvalidDataFile);
+            return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile));
         };
         if let Err(_e) = validar_linea_data(&linea) {
-            return Err(ErrorMiniKv::InvalidDataFile);
+            return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile));
         }
         let partes = separar_argumentos(&linea);
 
@@ -175,7 +176,7 @@ fn cargar_data_en_memoria(
             [clave, valor] => {
                 diccionario.insert(clave.to_string(), valor.to_string());
             }
-            _ => return Err(ErrorMiniKv::InvalidDataFile),
+            _ => return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile)),
         }
     }
     Ok(())
@@ -240,10 +241,10 @@ fn cargar_log_en_memoria(
 
     for linea_resultado in reader.lines() {
         let Ok(linea) = linea_resultado else {
-            return Err(ErrorMiniKv::InvalidLogFile);
+            return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile));
         };
         if let Err(_e) = validar_linea_log(&linea) {
-            return Err(ErrorMiniKv::InvalidLogFile);
+            return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile));
         }
         let partes = separar_argumentos(&linea);
         match partes.as_slice() {
@@ -254,7 +255,7 @@ fn cargar_log_en_memoria(
                 diccionario.remove(clave);
             }
             _ => {
-                return Err(ErrorMiniKv::InvalidLogFile);
+                return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile));
             }
         }
     }
@@ -283,9 +284,9 @@ fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
     match partes.as_slice() {
         [comando, _] | [comando, _, _] => match TipoComando::from_str(comando) {
             Ok(TipoComando::Set) => Ok(()),
-            _ => Err(ErrorMiniKv::InvalidLogFile),
+            _ => Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile)),
         },
-        _ => Err(ErrorMiniKv::InvalidLogFile),
+        _ => Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidLogFile)),
     }
 }
 
@@ -305,7 +306,7 @@ fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
 fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
     let partes = separar_argumentos(linea);
     if partes.len() != 2 {
-        return Err(ErrorMiniKv::InvalidDataFile);
+        return Err(ErrorMiniKv::Archivo(ErrorArchivo::InvalidDataFile));
     }
     Ok(())
 }
