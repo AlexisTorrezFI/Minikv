@@ -1,6 +1,6 @@
-use crate::comandos::TipoComando;
-use crate::errores::ErrorMiniKv;
-use crate::parser::separar_argumentos;
+use crate::minikv::comandos::TipoComando;
+use crate::minikv::errores::ErrorServidorDatos;
+use crate::minikv::parser::separar_argumentos;
 use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -8,6 +8,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::ErrorKind;
 use std::io::Write;
+use std::path::Path;
 use std::str::FromStr;
 
 /// Agrega una línea al archivo de la ruta pasada por parámetro.
@@ -19,17 +20,34 @@ use std::str::FromStr;
 /// # Errores
 /// - Devuelve `InvalidLogFile` si no se puede abrir o crear el archivo.
 /// - Devuelve `InvalidLogFile` si falla la escritura.
-pub fn append_linea_log(linea: &str, path_log: &str) -> Result<(), ErrorMiniKv> {
+pub fn append_linea_log(linea: &str, path_log: &str) -> Result<(), ErrorServidorDatos> {
+    validar_archivo_log(path_log)?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(path_log)
-        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
+        .map_err(|_| ErrorServidorDatos::InvalidLogFile)?;
     file.write_all(linea.as_bytes())
-        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
+        .map_err(|_| ErrorServidorDatos::InvalidLogFile)?;
+
     Ok(())
 }
+fn validar_archivo_log(path_log: &str) -> Result<(), ErrorServidorDatos> {
+    if !Path::new(path_log).exists() {
+        return Ok(());
+    }
 
+    let file = File::open(path_log)
+        .map_err(|_| ErrorServidorDatos::InvalidLogFile)?;
+    let reader = BufReader::new(file);
+
+    for linea in reader.lines() {
+        let linea = linea.map_err(|_| ErrorServidorDatos::InvalidLogFile)?;
+        validar_linea_log(&linea)?;
+    }
+
+    Ok(())
+}
 /// Sobrescribe el archivo pasado por parámetro con el contenido proporcionado.
 ///
 /// Si el archivo no existe, se crea. Si ya existe, su contenido previo
@@ -45,16 +63,16 @@ pub fn append_linea_log(linea: &str, path_log: &str) -> Result<(), ErrorMiniKv> 
 /// - `Ok(())` si el archivo se abre y se escribe correctamente.
 /// - `Err(ErrorMiniKv::InvalidDataFile)` si no se puede abrir o crear el archivo.
 /// - `Err(ErrorMiniKv::InvalidDataFile)` si ocurre un error al escribir.
-pub fn sobrescribir_data(contenido: &str, path_data: &str) -> Result<(), ErrorMiniKv> {
+pub fn sobrescribir_data(contenido: &str, path_data: &str) -> Result<(), ErrorServidorDatos> {
     let mut archivo = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
         .open(path_data)
-        .map_err(|_| ErrorMiniKv::InvalidDataFile)?;
+        .map_err(|_| ErrorServidorDatos::InvalidDataFile)?;
     archivo
         .write_all(contenido.as_bytes())
-        .map_err(|_| ErrorMiniKv::InvalidDataFile)?;
+        .map_err(|_| ErrorServidorDatos::InvalidDataFile)?;
     Ok(())
 }
 
@@ -72,13 +90,13 @@ pub fn sobrescribir_data(contenido: &str, path_data: &str) -> Result<(), ErrorMi
 ///
 /// - `Ok(())` si el archivo se abre correctamente y queda vacío.
 /// - `Err(ErrorMiniKv::InvalidLogFile)` si no se puede abrir o crear el archivo.
-pub fn vaciar_log(path_log: &str) -> Result<(), ErrorMiniKv> {
+pub fn vaciar_log(path_log: &str) -> Result<(), ErrorServidorDatos> {
     OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
         .open(path_log)
-        .map_err(|_| ErrorMiniKv::InvalidLogFile)?;
+        .map_err(|_| ErrorServidorDatos::InvalidLogFile)?;
     Ok(())
 }
 
@@ -98,21 +116,21 @@ pub fn vaciar_log(path_log: &str) -> Result<(), ErrorMiniKv> {
 pub fn reconstruir_estado(
     path_data: &str,
     path_log: &str,
-) -> Result<HashMap<String, String>, ErrorMiniKv> {
+) -> Result<HashMap<String, String>, ErrorServidorDatos> {
     let mut diccionario = HashMap::new();
     cargar_data_en_memoria(&mut diccionario, path_data)?;
     cargar_log_en_memoria(&mut diccionario, path_log)?;
     Ok(diccionario)
 }
 
-fn abrir_archivo(path: &str) -> Result<Option<File>, ErrorMiniKv> {
+fn abrir_archivo(path: &str) -> Result<Option<File>, ErrorServidorDatos> {
     match File::open(path) {
         Ok(file) => Ok(Some(file)),
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
                 Ok(None)
             } else {
-                Err(ErrorMiniKv::InvalidDataFile)
+                Err(ErrorServidorDatos::InvalidDataFile)
             }
         }
     }
@@ -155,7 +173,7 @@ fn abrir_archivo(path: &str) -> Result<Option<File>, ErrorMiniKv> {
 fn cargar_data_en_memoria(
     diccionario: &mut HashMap<String, String>,
     path_data: &str,
-) -> Result<(), ErrorMiniKv> {
+) -> Result<(), ErrorServidorDatos> {
     let file = match abrir_archivo(path_data) {
         Ok(Some(f)) => f,
         Ok(None) => return Ok(()),
@@ -164,10 +182,10 @@ fn cargar_data_en_memoria(
     let reader = BufReader::new(file);
     for linea_resultado in reader.lines() {
         let Ok(linea) = linea_resultado else {
-            return Err(ErrorMiniKv::InvalidDataFile);
+            return Err(ErrorServidorDatos::InvalidDataFile);
         };
         if let Err(_e) = validar_linea_data(&linea) {
-            return Err(ErrorMiniKv::InvalidDataFile);
+            return Err(ErrorServidorDatos::InvalidDataFile);
         }
         let partes = separar_argumentos(&linea);
 
@@ -175,7 +193,7 @@ fn cargar_data_en_memoria(
             [clave, valor] => {
                 diccionario.insert(clave.to_string(), valor.to_string());
             }
-            _ => return Err(ErrorMiniKv::InvalidDataFile),
+            _ => return Err(ErrorServidorDatos::InvalidDataFile),
         }
     }
     Ok(())
@@ -230,7 +248,7 @@ fn cargar_data_en_memoria(
 fn cargar_log_en_memoria(
     diccionario: &mut HashMap<String, String>,
     path_log: &str,
-) -> Result<(), ErrorMiniKv> {
+) -> Result<(), ErrorServidorDatos> {
     let file = match abrir_archivo(path_log) {
         Ok(Some(f)) => f,
         Ok(None) => return Ok(()),
@@ -240,10 +258,10 @@ fn cargar_log_en_memoria(
 
     for linea_resultado in reader.lines() {
         let Ok(linea) = linea_resultado else {
-            return Err(ErrorMiniKv::InvalidLogFile);
+            return Err(ErrorServidorDatos::InvalidLogFile);
         };
         if let Err(_e) = validar_linea_log(&linea) {
-            return Err(ErrorMiniKv::InvalidLogFile);
+            return Err(ErrorServidorDatos::InvalidLogFile);
         }
         let partes = separar_argumentos(&linea);
         match partes.as_slice() {
@@ -254,7 +272,7 @@ fn cargar_log_en_memoria(
                 diccionario.remove(clave);
             }
             _ => {
-                return Err(ErrorMiniKv::InvalidLogFile);
+                return Err(ErrorServidorDatos::InvalidLogFile);
             }
         }
     }
@@ -277,15 +295,15 @@ fn cargar_log_en_memoria(
 ///
 /// - `Ok(())` si la línea tiene un formato válido.
 /// - `Err(ErrorMiniKv::InvalidLogFile)` si la línea no cumple con el formato esperado.
-fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
+fn validar_linea_log(linea: &str) -> Result<(), ErrorServidorDatos> {
     let partes = separar_argumentos(linea);
 
     match partes.as_slice() {
         [comando, _] | [comando, _, _] => match TipoComando::from_str(comando) {
             Ok(TipoComando::Set) => Ok(()),
-            _ => Err(ErrorMiniKv::InvalidLogFile),
+            _ => Err(ErrorServidorDatos::InvalidLogFile),
         },
-        _ => Err(ErrorMiniKv::InvalidLogFile),
+        _ => Err(ErrorServidorDatos::InvalidLogFile),
     }
 }
 
@@ -302,10 +320,10 @@ fn validar_linea_log(linea: &str) -> Result<(), ErrorMiniKv> {
 ///
 /// - `Ok(())` si la línea tiene un formato válido.
 /// - `Err(ErrorMiniKv::InvalidDataFile)` si la línea no cumple con el formato esperado.
-fn validar_linea_data(linea: &str) -> Result<(), ErrorMiniKv> {
+fn validar_linea_data(linea: &str) -> Result<(), ErrorServidorDatos> {
     let partes = separar_argumentos(linea);
     if partes.len() != 2 {
-        return Err(ErrorMiniKv::InvalidDataFile);
+        return Err(ErrorServidorDatos::InvalidDataFile);
     }
     Ok(())
 }
