@@ -1,1 +1,1 @@
-/home/alexis/Escritorio/Github/Minikv/minikv/target/debug/minikv: /home/alexis/Escritorio/Github/Minikv/minikv/src/comandos.rs /home/alexis/Escritorio/Github/Minikv/minikv/src/main.rs
+/home/alexis/Escritorio/Github/proyects/Minikv/minikv/target/debug/minikv: /home/alexis/Escritorio/Github/proyects/Minikv/minikv/src/comandos.rs /home/alexis/Escritorio/Github/proyects/Minikv/minikv/src/main.rs

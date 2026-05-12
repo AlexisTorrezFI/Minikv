@@ -1,0 +1,3 @@
+target/
+.minikv.log
+.minikv.data
